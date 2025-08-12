@@ -251,6 +251,7 @@ namespace dns_resolver
                                                      const std::string &domain, RecordType type)
   {
     ProcessResult result;
+    (void)domain; // Mark as unused - domain is used for logging/debugging in verbose mode
 
     try
     {

@@ -109,7 +109,6 @@ namespace dns_resolver
     size_t current_offset = start_offset;
     std::string name;
     bool jumped = false;
-    size_t original_offset = offset_;
 
     while (current_offset < packet_.size())
     {
@@ -307,30 +306,35 @@ namespace dns_resolver
     std::vector<std::string> extract_cname_records(const std::vector<uint8_t> &packet)
     {
       // TODO: Implement CNAME extraction
+      (void)packet; // Mark as unused
       return {};
     }
 
     std::vector<std::string> extract_ns_records(const std::vector<uint8_t> &packet)
     {
       // TODO: Implement NS extraction
+      (void)packet; // Mark as unused
       return {};
     }
 
     std::vector<std::string> extract_authority_ns_records(const std::vector<uint8_t> &packet)
     {
       // TODO: Implement authority NS extraction
+      (void)packet; // Mark as unused
       return {};
     }
 
     std::vector<std::string> extract_additional_a_records(const std::vector<uint8_t> &packet)
     {
       // TODO: Implement additional A record extraction
+      (void)packet; // Mark as unused
       return {};
     }
 
     std::vector<std::string> extract_additional_aaaa_records(const std::vector<uint8_t> &packet)
     {
       // TODO: Implement additional AAAA record extraction
+      (void)packet; // Mark as unused
       return {};
     }
 
@@ -351,6 +355,7 @@ namespace dns_resolver
     std::string describe_packet(const std::vector<uint8_t> &packet)
     {
       // TODO: Implement packet description
+      (void)packet; // Mark as unused
       return "DNS packet description not implemented";
     }
 
