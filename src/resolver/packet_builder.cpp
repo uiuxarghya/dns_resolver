@@ -331,7 +331,8 @@ namespace dns_resolver
           .set_id(id)
           .set_flags(false, 0, false, false, recursion_desired, false, 0)
           .add_question(domain, type, RecordClass::IN)
-          .add_edns0_opt(4096) // Add EDNS(0) with 4KB UDP buffer size
+          // Temporarily disable EDNS(0) to test basic functionality
+          // .add_edns0_opt(4096)  // Add EDNS(0) with 4KB UDP buffer size
           .build();
     }
 
