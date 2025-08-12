@@ -4,18 +4,27 @@
 find_package(benchmark QUIET)
 
 if(NOT benchmark_FOUND)
-    # Download and build Google Benchmark if not found
-    include(FetchContent)
-    FetchContent_Declare(
-        googlebenchmark
-        URL https://github.com/google/benchmark/archive/v1.8.3.zip
-    )
+    # Try to find system-installed benchmark first
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(BENCHMARK benchmark)
+    endif()
 
-    # Configure benchmark options
-    set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "Disable benchmark testing" FORCE)
-    set(BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "Disable gtest tests" FORCE)
+    if(NOT BENCHMARK_FOUND)
+        # Download and build Google Benchmark if not found
+        include(FetchContent)
+        FetchContent_Declare(
+            googlebenchmark
+            GIT_REPOSITORY https://github.com/google/benchmark.git
+            GIT_TAG v1.8.3
+        )
 
-    FetchContent_MakeAvailable(googlebenchmark)
+        # Configure benchmark options
+        set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "Disable benchmark testing" FORCE)
+        set(BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "Disable gtest tests" FORCE)
+
+        FetchContent_MakeAvailable(googlebenchmark)
+    endif()
 endif()
 
 # Benchmark source files

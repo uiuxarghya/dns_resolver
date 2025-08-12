@@ -39,19 +39,21 @@ set(DNSRESOLVER_SOURCES
     src/resolver/packet_builder.cpp
     src/resolver/packet_parser.cpp
     src/resolver/cache.cpp
+    src/resolver/utils.cpp
     src/net/udp_client.cpp
     src/net/tcp_client.cpp
+    src/config/config.cpp
 )
 
 # Create the main executable (CLI-friendly name)
-add_executable(dns-resolver ${DNSRESOLVER_SOURCES})
+add_executable(dns_resolver ${DNSRESOLVER_SOURCES})
 
 # Link libraries
-target_link_libraries(dns-resolver PRIVATE Threads::Threads)
+target_link_libraries(dns_resolver PRIVATE Threads::Threads)
 
 # Set target properties
-set_target_properties(dns-resolver PROPERTIES
-    OUTPUT_NAME "dns-resolver"
+set_target_properties(dns_resolver PROPERTIES
+    OUTPUT_NAME "dns_resolver"
     CXX_STANDARD 23
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF
@@ -65,7 +67,7 @@ add_subdirectory(tests)
 add_subdirectory(benchmarks)
 
 # Install targets (binary in bin/)
-install(TARGETS dns-resolver
+install(TARGETS dns_resolver
     RUNTIME DESTINATION bin
 )
 

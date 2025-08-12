@@ -9,6 +9,7 @@
 #include <shared_mutex>
 #include <optional>
 #include <atomic>
+#include <mutex>
 
 namespace dns_resolver
 {

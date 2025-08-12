@@ -4,6 +4,8 @@
 #include <string>
 #include <chrono>
 #include <cstdint>
+#include <sys/socket.h>
+#include <netinet/in.h>
 
 namespace dns_resolver
 {

@@ -3,6 +3,7 @@
 #include <vector>
 #include <string>
 #include <array>
+#include <cstring>
 
 namespace dns_resolver
 {
