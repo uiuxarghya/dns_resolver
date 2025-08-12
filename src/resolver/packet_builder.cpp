@@ -210,18 +210,18 @@ namespace dns_resolver
 
   void PacketBuilder::write_uint16(uint16_t value, std::vector<uint8_t> &buffer)
   {
-    uint16_t network_value = utils::htons_safe(value);
-    buffer.push_back(static_cast<uint8_t>(network_value >> 8));
-    buffer.push_back(static_cast<uint8_t>(network_value & 0xFF));
+    // Write in network byte order (big endian)
+    buffer.push_back(static_cast<uint8_t>(value >> 8));
+    buffer.push_back(static_cast<uint8_t>(value & 0xFF));
   }
 
   void PacketBuilder::write_uint32(uint32_t value, std::vector<uint8_t> &buffer)
   {
-    uint32_t network_value = utils::htonl_safe(value);
-    buffer.push_back(static_cast<uint8_t>(network_value >> 24));
-    buffer.push_back(static_cast<uint8_t>((network_value >> 16) & 0xFF));
-    buffer.push_back(static_cast<uint8_t>((network_value >> 8) & 0xFF));
-    buffer.push_back(static_cast<uint8_t>(network_value & 0xFF));
+    // Write in network byte order (big endian)
+    buffer.push_back(static_cast<uint8_t>(value >> 24));
+    buffer.push_back(static_cast<uint8_t>((value >> 16) & 0xFF));
+    buffer.push_back(static_cast<uint8_t>((value >> 8) & 0xFF));
+    buffer.push_back(static_cast<uint8_t>(value & 0xFF));
   }
 
   void PacketBuilder::write_resource_record(const ResourceRecord &rr, std::vector<uint8_t> &buffer)
@@ -261,15 +261,29 @@ namespace dns_resolver
   std::vector<std::string> PacketBuilder::split_domain_name(const std::string &name)
   {
     std::vector<std::string> labels;
-    std::stringstream ss(name);
-    std::string label;
 
-    while (std::getline(ss, label, '.'))
+    if (name.empty() || name == ".")
     {
-      if (!label.empty())
+      return labels; // Root domain
+    }
+
+    size_t start = 0;
+    size_t pos = 0;
+
+    while (pos < name.length())
+    {
+      pos = name.find('.', start);
+      if (pos == std::string::npos)
       {
-        labels.push_back(label);
+        pos = name.length();
       }
+
+      if (pos > start)
+      {
+        labels.push_back(name.substr(start, pos - start));
+      }
+
+      start = pos + 1;
     }
 
     return labels;
@@ -296,16 +310,51 @@ namespace dns_resolver
     {
       // Convert IPv4 address to bytes
       std::vector<uint8_t> addr_bytes(4);
-      // Simple IPv4 parsing (should use inet_pton in production)
-      // This is a simplified implementation
-      return {}; // TODO: Implement proper IPv4 parsing
+
+      // Parse IPv4 address
+      size_t pos = 0;
+      for (int i = 0; i < 4; ++i)
+      {
+        size_t next_pos = ipv4_address.find('.', pos);
+        if (next_pos == std::string::npos && i < 3)
+        {
+          return {}; // Invalid format
+        }
+
+        std::string octet = ipv4_address.substr(pos, next_pos - pos);
+        int value = std::stoi(octet);
+        if (value < 0 || value > 255)
+        {
+          return {}; // Invalid octet
+        }
+
+        addr_bytes[i] = static_cast<uint8_t>(value);
+        pos = next_pos + 1;
+      }
+
+      PacketBuilder builder;
+      return builder
+          .set_id(query_id)
+          .set_flags(true, 0, authoritative, false, true, true, 0)
+          .add_question(domain, RecordType::A, RecordClass::IN)
+          .add_answer(domain, RecordType::A, RecordClass::IN, ttl, addr_bytes)
+          .build();
     }
 
     std::vector<uint8_t> create_aaaa_response(uint16_t query_id, const std::string &domain,
                                               const std::string &ipv6_address, uint32_t ttl,
                                               bool authoritative)
     {
-      // TODO: Implement IPv6 response creation
+      // Convert IPv6 address to bytes (simplified implementation)
+      std::vector<uint8_t> addr_bytes(16, 0);
+
+      // This is a simplified IPv6 parser - in production, use inet_pton
+      // For now, return empty to indicate not implemented
+      (void)query_id;
+      (void)domain;
+      (void)ipv6_address;
+      (void)ttl;
+      (void)authoritative;
       return {};
     }
 

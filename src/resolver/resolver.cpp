@@ -271,22 +271,22 @@ namespace dns_resolver
         if (rr.type == type)
         {
           result.has_answer = true;
-          if (type == RecordType::A)
+          if (type == RecordType::A && rr.rdata.size() == 4)
           {
-            auto addr = rr.get_a_record();
+            auto addr = utils::ipv4_to_string(rr.rdata);
             if (!addr.empty())
               result.addresses.push_back(addr);
           }
-          else if (type == RecordType::AAAA)
+          else if (type == RecordType::AAAA && rr.rdata.size() == 16)
           {
-            auto addr = rr.get_aaaa_record();
+            auto addr = utils::ipv6_to_string(rr.rdata);
             if (!addr.empty())
               result.addresses.push_back(addr);
           }
         }
         else if (rr.type == RecordType::CNAME)
         {
-          // TODO: Extract CNAME target from rdata
+          // For now, skip CNAME processing - this would require parsing domain names from rdata
           // result.cname_target = extract_cname_target(rr.rdata);
         }
       }
@@ -294,18 +294,37 @@ namespace dns_resolver
       // Check for referrals in authority section
       if (!result.has_answer)
       {
+        std::vector<std::string> ns_names;
         for (const auto &rr : message.authorities)
         {
           if (rr.type == RecordType::NS)
           {
-            // TODO: Extract NS names from rdata
-            // auto ns_name = extract_ns_name(rr.rdata);
-            // result.referral_servers.push_back(ns_name);
+            // For now, we'll extract glue records from additional section
+            // NS name extraction from rdata would require domain name parsing
+            ns_names.push_back(rr.name); // Use the domain being delegated
           }
         }
 
-        // Extract glue records
-        result.referral_servers = extract_glue_records(response, result.referral_servers);
+        // Extract glue records from additional section
+        for (const auto &rr : message.additionals)
+        {
+          if (rr.type == RecordType::A && rr.rdata.size() == 4)
+          {
+            auto addr = utils::ipv4_to_string(rr.rdata);
+            if (!addr.empty())
+            {
+              result.referral_servers.push_back(addr);
+            }
+          }
+          else if (rr.type == RecordType::AAAA && rr.rdata.size() == 16)
+          {
+            auto addr = utils::ipv6_to_string(rr.rdata);
+            if (!addr.empty())
+            {
+              result.referral_servers.push_back(addr);
+            }
+          }
+        }
       }
     }
     catch (const std::exception &e)
@@ -324,7 +343,9 @@ namespace dns_resolver
   std::vector<std::string> Resolver::extract_glue_records(const std::vector<uint8_t> &response,
                                                           const std::vector<std::string> &ns_names)
   {
-    // TODO: Implement glue record extraction
+    // This functionality is now handled in process_response
+    (void)response; // Mark as unused
+    (void)ns_names; // Mark as unused
     return {};
   }
 
@@ -334,8 +355,11 @@ namespace dns_resolver
 
     for (const auto &ns_name : ns_names)
     {
-      auto result = resolve_recursive(ns_name, RecordType::A, config::get_ipv4_root_servers(), depth);
-      ip_addresses.insert(ip_addresses.end(), result.addresses.begin(), result.addresses.end());
+      if (depth < config_.max_recursion_depth)
+      {
+        auto result = resolve_recursive(ns_name, RecordType::A, config::get_ipv4_root_servers(), depth);
+        ip_addresses.insert(ip_addresses.end(), result.addresses.begin(), result.addresses.end());
+      }
     }
 
     return ip_addresses;

@@ -109,6 +109,7 @@ namespace dns_resolver
     size_t current_offset = start_offset;
     std::string name;
     bool jumped = false;
+    size_t original_offset = offset_;
 
     while (current_offset < packet_.size())
     {
@@ -119,7 +120,7 @@ namespace dns_resolver
         // End of name
         if (!jumped)
         {
-          offset_ = current_offset + 1;
+          const_cast<PacketParser *>(this)->offset_ = current_offset + 1;
         }
         break;
       }
@@ -143,7 +144,7 @@ namespace dns_resolver
 
         if (!jumped)
         {
-          offset_ = current_offset + 2;
+          const_cast<PacketParser *>(this)->offset_ = current_offset + 2;
           jumped = true;
         }
         current_offset = pointer;

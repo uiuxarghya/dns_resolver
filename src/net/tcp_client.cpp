@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <cstring>
 #include <stdexcept>
+#include <cerrno>
 
 namespace dns_resolver
 {

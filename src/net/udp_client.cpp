@@ -8,6 +8,7 @@
 #include <poll.h>
 #include <cstring>
 #include <stdexcept>
+#include <cerrno>
 
 namespace dns_resolver
 {
@@ -52,7 +53,7 @@ namespace dns_resolver
     int sock = create_socket(is_ipv6);
     if (sock == -1)
     {
-      throw NetworkException("Failed to create UDP socket");
+      throw NetworkException("Failed to create UDP socket: " + std::string(strerror(errno)));
     }
 
     // Set socket timeout
