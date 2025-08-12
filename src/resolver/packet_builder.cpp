@@ -83,6 +83,36 @@ namespace dns_resolver
     return *this;
   }
 
+  PacketBuilder &PacketBuilder::add_edns0_opt(uint16_t udp_payload_size,
+                                              uint8_t extended_rcode,
+                                              uint8_t version,
+                                              uint16_t flags)
+  {
+    // EDNS(0) OPT record format:
+    // NAME: root domain (empty)
+    // TYPE: OPT (41)
+    // CLASS: UDP payload size
+    // TTL: extended RCODE (8 bits) | version (8 bits) | flags (16 bits)
+    // RDLENGTH: 0 (no options for basic EDNS(0))
+    // RDATA: empty (no options)
+
+    ResourceRecord opt_rr;
+    opt_rr.name = ""; // Root domain for OPT record
+    opt_rr.type = RecordType::OPT;
+    opt_rr.rr_class = static_cast<RecordClass>(udp_payload_size); // CLASS field holds UDP payload size
+
+    // TTL field holds: extended_rcode (8) | version (8) | flags (16)
+    opt_rr.ttl = (static_cast<uint32_t>(extended_rcode) << 24) |
+                 (static_cast<uint32_t>(version) << 16) |
+                 static_cast<uint32_t>(flags);
+
+    opt_rr.rdata.clear(); // No options for basic EDNS(0)
+
+    additionals_.push_back(opt_rr);
+    header_.arcount = static_cast<uint16_t>(additionals_.size());
+    return *this;
+  }
+
   std::vector<uint8_t> PacketBuilder::build()
   {
     std::vector<uint8_t> packet;
@@ -301,6 +331,7 @@ namespace dns_resolver
           .set_id(id)
           .set_flags(false, 0, false, false, recursion_desired, false, 0)
           .add_question(domain, type, RecordClass::IN)
+          .add_edns0_opt(4096) // Add EDNS(0) with 4KB UDP buffer size
           .build();
     }
 

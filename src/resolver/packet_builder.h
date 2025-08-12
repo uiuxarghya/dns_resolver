@@ -99,6 +99,19 @@ namespace dns_resolver
                                   uint32_t ttl, const std::vector<uint8_t> &rdata);
 
     /**
+     * @brief Add EDNS(0) OPT record for extended DNS capabilities
+     * @param udp_payload_size Maximum UDP payload size client can handle
+     * @param extended_rcode Extended response code (usually 0)
+     * @param version EDNS version (should be 0)
+     * @param flags EDNS flags (e.g., DO bit for DNSSEC)
+     * @return Reference to this builder for method chaining
+     */
+    PacketBuilder &add_edns0_opt(uint16_t udp_payload_size = 4096,
+                                 uint8_t extended_rcode = 0,
+                                 uint8_t version = 0,
+                                 uint16_t flags = 0);
+
+    /**
      * @brief Build the final DNS packet
      * @return Vector of bytes representing the complete DNS packet
      * @throws ProtocolException if the packet cannot be built
