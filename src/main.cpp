@@ -26,7 +26,7 @@ namespace dns_resolver
     std::cout << "Usage: " << program_name << " [OPTIONS] <domain>\n\n";
     std::cout << "DNS Resolver - A recursive DNS resolver written in modern C++ (C++23)\n\n";
     std::cout << "Options:\n";
-    std::cout << "  -t, --type TYPE     Query type (A, AAAA, ANY) [default: A]\n";
+    std::cout << "  -t, --type TYPE     Query type (A, AAAA, TXT, MX, NS, CNAME, SOA, ANY) [default: A]\n";
     std::cout << "  -v, --verbose       Show detailed resolution path\n";
     std::cout << "  -a, --all           Resolve both A and AAAA records\n";
     std::cout << "  -T, --timeout SEC   Query timeout in seconds [default: 5]\n";

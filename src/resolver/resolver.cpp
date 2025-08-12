@@ -283,6 +283,27 @@ namespace dns_resolver
             if (!addr.empty())
               result.addresses.push_back(addr);
           }
+          else if (type == RecordType::TXT)
+          {
+            auto txt = rr.get_txt_record();
+            if (!txt.empty())
+              result.addresses.push_back(txt);
+          }
+          else if (type == RecordType::MX)
+          {
+            // MX records have priority (2 bytes) + domain name
+            if (rr.rdata.size() >= 3)
+            {
+              uint16_t priority = (static_cast<uint16_t>(rr.rdata[0]) << 8) | rr.rdata[1];
+              // For now, just show priority and indicate MX record
+              result.addresses.push_back(std::to_string(priority) + " (MX record - domain parsing not implemented)");
+            }
+          }
+          else if (type == RecordType::NS || type == RecordType::CNAME)
+          {
+            // These require domain name parsing from rdata
+            result.addresses.push_back("(Domain name parsing not implemented for " + utils::record_type_to_string(type) + ")");
+          }
         }
         else if (rr.type == RecordType::CNAME)
         {
