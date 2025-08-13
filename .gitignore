@@ -7,6 +7,9 @@ cmake-build-*/
 # Compiled binaries
 dns_resolver
 debug_test
+debug_tcp
+debug_*.cpp
+debug_*
 *.exe
 *.out
 *.app
