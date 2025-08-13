@@ -6,7 +6,9 @@ A recursive DNS resolver implemented in C++ (C++23) from scratch.
 
 A complete DNS resolver that implements the full recursive resolution process by directly querying root servers, TLD servers, and authoritative servers without using OS-provided resolver functions. It follows RFC standards and provides high performance with intelligent caching.
 
-## Features
+> 📖 **For detailed documentation, tutorials, and API reference, visit [DNS Resolver Documentation](https://github.com/uiuxarghya/dns_resolver/wiki/)**
+
+## ✨ Features
 
 - **Full Recursive Resolution**: Manually implements the complete DNS resolution chain from root servers to authoritative servers
 - **RFC Compliance**: Strictly follows DNS protocol specifications (RFC 1035, 1034, 2181, 4034, 7766)
@@ -15,18 +17,20 @@ A complete DNS resolver that implements the full recursive resolution process by
 - **Thread Safety**: Concurrent DNS queries with proper synchronization
 - **Comprehensive Testing**: Unit tests, integration tests, and benchmarking suite
 - **Production Ready**: Proper error handling, logging, and monitoring capabilities
+- **Easy Configuration**: Environment variables and command-line options
 
 ## Supported Record Types
 
-- **A** (IPv4 addresses)
-- **AAAA** (IPv6 addresses)
-- **CNAME** (Canonical names with proper following)
-- **NS** (Name servers)
-- **MX** (Mail exchange)
-- **TXT** (Text records)
-- **SOA** (Start of authority)
-- **ANY** (All available records)
-- Additional types can be easily added
+| Type      | Description           | Example                                   |
+| --------- | --------------------- | ----------------------------------------- |
+| **A**     | IPv4 addresses        | `./dns_resolver example.com`              |
+| **AAAA**  | IPv6 addresses        | `./dns_resolver -t AAAA example.com`      |
+| **CNAME** | Canonical names       | `./dns_resolver -t CNAME www.example.com` |
+| **NS**    | Name servers          | `./dns_resolver -t NS example.com`        |
+| **MX**    | Mail exchange         | `./dns_resolver -t MX example.com`        |
+| **TXT**   | Text records          | `./dns_resolver -t TXT example.com`       |
+| **SOA**   | Start of authority    | `./dns_resolver -t SOA example.com`       |
+| **ANY**   | All available records | `./dns_resolver -t ANY example.com`       |
 
 ## Requirements
 
@@ -78,12 +82,14 @@ sudo make install
 
 ### Command Line Options
 
-- `-v, --verbose`: Show detailed resolution path
-- `-t, --type <TYPE>`: Specify query type (A, AAAA, CNAME, NS, MX, TXT, SOA, ANY)
-- `-a, --all`: Resolve both A and AAAA records
-- `-T, --timeout <SEC>`: Query timeout in seconds [default: 5]
-- `-h, --help`: Show help message
-- `--version`: Show version information
+| Option                | Description                                        | Default |
+| --------------------- | -------------------------------------------------- | ------- |
+| `-v, --verbose`       | Show detailed resolution path                      | false   |
+| `-t, --type <TYPE>`   | Query type (A, AAAA, CNAME, NS, MX, TXT, SOA, ANY) | A       |
+| `-a, --all`           | Resolve both A and AAAA records                    | false   |
+| `-T, --timeout <SEC>` | Query timeout in seconds                           | 5       |
+| `-h, --help`          | Show help message                                  | -       |
+| `--version`           | Show version information                           | -       |
 
 ### Examples
 
