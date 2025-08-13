@@ -221,12 +221,35 @@ namespace dns_resolver
         if (query_type == RecordType::NS)
         {
           log_verbose("Got NS records in answer section, extracting referral servers");
-          // The addresses contain NS names, we need to resolve them to IPs
-          auto resolved_ips = resolve_name_servers(process_result.addresses, depth + 1);
-          if (!resolved_ips.empty())
+
+          // First, try to get glue records from the additional section
+          std::vector<std::string> glue_ips;
+          if (!process_result.referral_servers.empty())
           {
-            log_verbose("Following referral to " + std::to_string(resolved_ips.size()) + " servers");
-            return resolve_recursive(domain, type, resolved_ips, depth + 1);
+            glue_ips = process_result.referral_servers;
+            log_verbose("Found " + std::to_string(glue_ips.size()) + " glue records");
+          }
+
+          // If we have glue records, use them directly
+          if (!glue_ips.empty())
+          {
+            log_verbose("Using glue records, following referral to " + std::to_string(glue_ips.size()) + " servers");
+            return resolve_recursive(domain, type, glue_ips, depth + 1);
+          }
+
+          // If no glue records, try to resolve NS names (but avoid infinite recursion)
+          if (depth < 2)
+          { // Only resolve NS names at shallow depths
+            auto resolved_ips = resolve_name_servers(process_result.addresses, depth + 1);
+            if (!resolved_ips.empty())
+            {
+              log_verbose("Resolved NS names, following referral to " + std::to_string(resolved_ips.size()) + " servers");
+              return resolve_recursive(domain, type, resolved_ips, depth + 1);
+            }
+          }
+          else
+          {
+            log_verbose("Maximum depth reached, cannot resolve NS names recursively");
           }
         }
       }
@@ -366,6 +389,32 @@ namespace dns_resolver
         }
       }
 
+      // If we have NS records in answer section, also check for glue records in additional section
+      if (result.has_answer && type == RecordType::NS)
+      {
+        for (const auto &rr : message.additionals)
+        {
+          if (rr.type == RecordType::A && rr.rdata.size() == 4)
+          {
+            auto addr = utils::ipv4_to_string(rr.rdata);
+            if (!addr.empty())
+            {
+              result.referral_servers.push_back(addr);
+              log_verbose("Found glue record (A): " + addr);
+            }
+          }
+          else if (rr.type == RecordType::AAAA && rr.rdata.size() == 16)
+          {
+            auto addr = utils::ipv6_to_string(rr.rdata);
+            if (!addr.empty())
+            {
+              result.referral_servers.push_back(addr);
+              log_verbose("Found glue record (AAAA): " + addr);
+            }
+          }
+        }
+      }
+
       // Check for referrals in authority section
       if (!result.has_answer)
       {
@@ -458,8 +507,6 @@ namespace dns_resolver
   std::string Resolver::extract_domain_name_from_rdata(const std::vector<uint8_t> &rdata,
                                                        const std::vector<uint8_t> &full_packet)
   {
-    (void)full_packet; // Mark as unused - would be used for compression pointer resolution
-
     if (rdata.empty())
     {
       return "";
@@ -467,51 +514,83 @@ namespace dns_resolver
 
     try
     {
-      // Simple domain name parsing from rdata
-      // This is a basic implementation - a full implementation would handle compression pointers
-      std::string domain_name;
-      size_t pos = 0;
-
-      while (pos < rdata.size())
-      {
-        uint8_t length = rdata[pos];
-
-        if (length == 0)
-        {
-          // End of domain name
-          break;
-        }
-
-        if ((length & 0xC0) == 0xC0)
-        {
-          // Compression pointer - for now, we'll skip this complex case
-          // A full implementation would follow the pointer in the full packet
-          log_verbose("Compression pointer found in NS rdata - skipping");
-          break;
-        }
-
-        if (length > 63 || pos + length + 1 > rdata.size())
-        {
-          // Invalid label length
-          break;
-        }
-
-        if (!domain_name.empty())
-        {
-          domain_name += ".";
-        }
-
-        domain_name += std::string(rdata.begin() + pos + 1, rdata.begin() + pos + 1 + length);
-        pos += length + 1;
-      }
-
-      return domain_name;
+      return parse_domain_name_with_compression(rdata, 0, full_packet);
     }
     catch (const std::exception &e)
     {
       log_verbose("Error parsing domain name from rdata: " + std::string(e.what()));
       return "";
     }
+  }
+
+  std::string Resolver::parse_domain_name_with_compression(const std::vector<uint8_t> &data,
+                                                           size_t start_offset,
+                                                           const std::vector<uint8_t> &full_packet)
+  {
+    std::string domain_name;
+    size_t pos = start_offset;
+    bool jumped = false;
+    size_t jump_count = 0;
+    const size_t max_jumps = 10; // Prevent infinite loops
+
+    while (pos < data.size() && jump_count < max_jumps)
+    {
+      uint8_t length = data[pos];
+
+      if (length == 0)
+      {
+        // End of domain name
+        break;
+      }
+
+      if ((length & 0xC0) == 0xC0)
+      {
+        // Compression pointer
+        if (pos + 1 >= data.size())
+        {
+          break; // Invalid pointer
+        }
+
+        uint16_t pointer = ((static_cast<uint16_t>(length & 0x3F) << 8) | data[pos + 1]);
+
+        if (pointer >= full_packet.size())
+        {
+          log_verbose("Invalid compression pointer: " + std::to_string(pointer));
+          break;
+        }
+
+        // Follow the pointer in the full packet
+        std::string compressed_part = parse_domain_name_with_compression(full_packet, pointer, full_packet);
+        if (!compressed_part.empty())
+        {
+          if (!domain_name.empty())
+          {
+            domain_name += ".";
+          }
+          domain_name += compressed_part;
+        }
+
+        jumped = true;
+        jump_count++;
+        break; // After following a pointer, we're done with this name
+      }
+
+      if (length > 63 || pos + length + 1 > data.size())
+      {
+        // Invalid label length
+        break;
+      }
+
+      if (!domain_name.empty())
+      {
+        domain_name += ".";
+      }
+
+      domain_name += std::string(data.begin() + pos + 1, data.begin() + pos + 1 + length);
+      pos += length + 1;
+    }
+
+    return domain_name;
   }
 
   std::string Resolver::extract_tld(const std::string &domain)
