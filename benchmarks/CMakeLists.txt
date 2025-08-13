@@ -57,8 +57,10 @@ target_sources(dns_resolver_benchmark
     ${CMAKE_SOURCE_DIR}/src/resolver/packet_builder.cpp
     ${CMAKE_SOURCE_DIR}/src/resolver/packet_parser.cpp
     ${CMAKE_SOURCE_DIR}/src/resolver/cache.cpp
+    ${CMAKE_SOURCE_DIR}/src/resolver/utils.cpp
     ${CMAKE_SOURCE_DIR}/src/net/udp_client.cpp
     ${CMAKE_SOURCE_DIR}/src/net/tcp_client.cpp
+    ${CMAKE_SOURCE_DIR}/src/config/config.cpp
 )
 
 # Set C++23 standard for benchmarks

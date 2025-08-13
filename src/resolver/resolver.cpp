@@ -566,7 +566,6 @@ namespace dns_resolver
   {
     std::string domain_name;
     size_t pos = start_offset;
-    bool jumped = false;
     size_t jump_count = 0;
     const size_t max_jumps = 10; // Prevent infinite loops
 
@@ -607,7 +606,6 @@ namespace dns_resolver
           domain_name += compressed_part;
         }
 
-        jumped = true;
         jump_count++;
         break; // After following a pointer, we're done with this name
       }

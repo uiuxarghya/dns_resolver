@@ -6,6 +6,7 @@
 #include "../src/resolver/utils.h"
 #include <random>
 #include <string>
+#include <iostream>
 
 using namespace dns_resolver;
 

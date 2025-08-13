@@ -1,8 +1,10 @@
 #include <gtest/gtest.h>
 #include "../src/resolver/resolver.h"
 #include "../src/config/root_servers.h"
+#include "../src/config/config.h"
 #include <thread>
 #include <chrono>
+#include <numeric>
 
 using namespace dns_resolver;
 
