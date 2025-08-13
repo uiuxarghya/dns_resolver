@@ -90,3 +90,7 @@ core.*
 *.bak
 *.backup
 *~
+
+# Test files
+tests/results/results.txt
+tests/results/failed_domains.txt
