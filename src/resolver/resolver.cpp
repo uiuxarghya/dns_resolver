@@ -7,6 +7,7 @@
 #include <iostream>
 #include <thread>
 #include <random>
+#include <unordered_map>
 
 namespace dns_resolver
 {
@@ -61,8 +62,6 @@ namespace dns_resolver
     }
 
     auto result = resolve_recursive(domain, type, root_servers, 0);
-
-    // Note: No public DNS fallback - using pure recursive resolution only
 
     auto end_time = std::chrono::steady_clock::now();
     result.resolution_time =
@@ -189,7 +188,7 @@ namespace dns_resolver
 
       if (depth == 0 && type != RecordType::NS)
       {
-        // At root level: query for TLD NS records (e.g., "com." for "google.com")
+        // At root level: query for TLD NS records (e.g., "com." for "example.com")
         query_type = RecordType::NS;
         query_domain = extract_tld(domain);
         log_verbose("Querying root servers for TLD: " + query_domain);
@@ -237,7 +236,7 @@ namespace dns_resolver
             return resolve_recursive(domain, type, glue_ips, depth + 1);
           }
 
-          // If no glue records, try to resolve NS names (but avoid infinite recursion)
+          // If no glue records and no hardcoded IPs, try to resolve NS names (but avoid infinite recursion)
           if (depth < 2)
           { // Only resolve NS names at shallow depths
             auto resolved_ips = resolve_name_servers(process_result.addresses, depth + 1);
@@ -281,27 +280,60 @@ namespace dns_resolver
     {
       auto packet = packet_builders::create_query(generate_query_id(), domain, type, true);
 
-      if (use_tcp || !tcp_client_)
+      // Retry logic with exponential backoff
+      for (size_t attempt = 0; attempt < config_.max_retries; ++attempt)
       {
-        return tcp_client_->query(server, packet);
-      }
-      else
-      {
-        auto response = udp_client_->query(server, packet);
-
-        // Check if response is truncated
-        if (!response.empty() && packet_parsers::is_truncated_response(response))
+        try
         {
-          log_verbose("Response truncated, retrying with TCP");
-          return tcp_client_->query(server, packet);
-        }
+          if (use_tcp || !udp_client_)
+          {
+            auto response = tcp_client_->query(server, packet);
+            if (!response.empty())
+            {
+              return response;
+            }
+          }
+          else
+          {
+            auto response = udp_client_->query(server, packet);
 
-        return response;
+            // Check if response is truncated
+            if (!response.empty() && packet_parsers::is_truncated_response(response))
+            {
+              log_verbose("Response truncated, retrying with TCP");
+              return tcp_client_->query(server, packet);
+            }
+
+            if (!response.empty())
+            {
+              return response;
+            }
+          }
+
+          // If this wasn't the last attempt, wait before retrying
+          if (attempt < config_.max_retries - 1)
+          {
+            auto delay = config_.retry_delay * (1 << attempt); // Exponential backoff
+            log_verbose("Query attempt " + std::to_string(attempt + 1) + " failed, retrying in " +
+                        std::to_string(delay.count()) + "ms");
+            std::this_thread::sleep_for(delay);
+          }
+        }
+        catch (const std::exception &e)
+        {
+          log_verbose("Query attempt " + std::to_string(attempt + 1) + " failed: " + e.what());
+          if (attempt == config_.max_retries - 1)
+          {
+            throw; // Re-throw on final attempt
+          }
+        }
       }
+
+      return {};
     }
     catch (const std::exception &e)
     {
-      log_verbose("Query failed: " + std::string(e.what()));
+      log_verbose("All query attempts failed: " + std::string(e.what()));
       return {};
     }
   }
@@ -472,7 +504,10 @@ namespace dns_resolver
           }
         }
 
-        // First, try to find glue records in additional section
+        // First, try to find glue records in additional section that match NS names
+        std::unordered_map<std::string, std::vector<std::string>> glue_map;
+        std::vector<std::pair<std::string, std::string>> all_glue_records; // name, ip pairs
+
         for (const auto &rr : message.additionals)
         {
           if (rr.type == RecordType::A && rr.rdata.size() == 4)
@@ -480,7 +515,10 @@ namespace dns_resolver
             auto addr = utils::ipv4_to_string(rr.rdata);
             if (!addr.empty())
             {
-              result.referral_servers.push_back(addr);
+              std::string glue_name = utils::normalize_domain_name(rr.name);
+              all_glue_records.emplace_back(glue_name, addr);
+              glue_map[glue_name].push_back(addr);
+              log_verbose("Found glue record: " + glue_name + " -> " + addr);
             }
           }
           else if (rr.type == RecordType::AAAA && rr.rdata.size() == 16)
@@ -488,15 +526,67 @@ namespace dns_resolver
             auto addr = utils::ipv6_to_string(rr.rdata);
             if (!addr.empty())
             {
-              result.referral_servers.push_back(addr);
+              std::string glue_name = utils::normalize_domain_name(rr.name);
+              all_glue_records.emplace_back(glue_name, addr);
+              glue_map[glue_name].push_back(addr);
+              log_verbose("Found glue record: " + glue_name + " -> " + addr);
             }
+          }
+        }
+
+        // Enhanced matching: exact match first, then fuzzy matching
+        for (const auto &ns_name : ns_names)
+        {
+          std::string normalized_ns = utils::normalize_domain_name(ns_name);
+
+          // Exact match
+          auto it = glue_map.find(normalized_ns);
+          if (it != glue_map.end())
+          {
+            result.referral_servers.insert(result.referral_servers.end(),
+                                           it->second.begin(), it->second.end());
+            log_verbose("Exact match glue records for " + ns_name + ": " +
+                        std::to_string(it->second.size()) + " addresses");
+            continue;
+          }
+
+          // Fuzzy matching: check if any glue record contains the NS name or vice versa
+          bool found_fuzzy = false;
+          for (const auto &glue_pair : all_glue_records)
+          {
+            const std::string &glue_name = glue_pair.first;
+            const std::string &glue_ip = glue_pair.second;
+
+            // Check if glue name contains NS name or NS name contains glue name
+            if (glue_name.find(normalized_ns) != std::string::npos ||
+                normalized_ns.find(glue_name) != std::string::npos)
+            {
+              result.referral_servers.push_back(glue_ip);
+              log_verbose("Fuzzy match glue record: " + ns_name + " matches " + glue_name + " -> " + glue_ip);
+              found_fuzzy = true;
+            }
+          }
+
+          if (!found_fuzzy)
+          {
+            log_verbose("No glue record found for NS: " + ns_name);
+          }
+        }
+
+        // If still no glue records found but we have some A records, use them as potential servers
+        if (result.referral_servers.empty() && !all_glue_records.empty())
+        {
+          log_verbose("No exact matches, using all available glue records as potential servers");
+          for (const auto &glue_pair : all_glue_records)
+          {
+            result.referral_servers.push_back(glue_pair.second);
           }
         }
 
         // If no glue records found, resolve NS names to IP addresses
         if (result.referral_servers.empty() && !ns_names.empty())
         {
-          log_verbose("No glue records found, resolving NS names");
+          log_verbose("No glue records found, resolving NS names iteratively");
           auto resolved_ips = resolve_name_servers(ns_names, depth + 1);
           result.referral_servers.insert(result.referral_servers.end(),
                                          resolved_ips.begin(), resolved_ips.end());
@@ -531,13 +621,110 @@ namespace dns_resolver
 
     for (const auto &ns_name : ns_names)
     {
+      log_verbose("Attempting to resolve NS: " + ns_name);
+
+      // First try cache
+      if (config_.enable_caching)
+      {
+        auto cached_result = check_cache(ns_name, RecordType::A);
+        if (cached_result.has_value() && cached_result->success)
+        {
+          log_verbose("Found cached result for NS: " + ns_name);
+          ip_addresses.insert(ip_addresses.end(),
+                              cached_result->addresses.begin(),
+                              cached_result->addresses.end());
+          continue;
+        }
+      }
+
+      // For NS resolution, try a more targeted approach
+      // Query multiple root servers to increase chances of getting glue records
       if (depth < config_.max_recursion_depth)
       {
-        auto result = resolve_recursive(ns_name, RecordType::A, config::get_ipv4_root_servers(), depth);
-        ip_addresses.insert(ip_addresses.end(), result.addresses.begin(), result.addresses.end());
+        std::vector<std::string> root_servers = config::get_ipv4_root_servers();
+
+        // Try each root server - some might have better glue records
+        for (const auto &root_server : root_servers)
+        {
+          log_verbose("Querying root server " + root_server + " for NS: " + ns_name);
+
+          try
+          {
+            auto response = query_server(root_server, ns_name, RecordType::A, false);
+            if (!response.empty())
+            {
+              auto processed = process_response(response, ns_name, RecordType::A, depth);
+
+              // If we got direct answers, use them
+              if (processed.has_answer && !processed.addresses.empty())
+              {
+                log_verbose("Got direct answer for NS: " + ns_name);
+                ip_addresses.insert(ip_addresses.end(),
+                                    processed.addresses.begin(),
+                                    processed.addresses.end());
+
+                // Cache this result
+                if (config_.enable_caching)
+                {
+                  ResolutionResult cache_result(processed.addresses);
+                  store_in_cache(ns_name, RecordType::A, cache_result, 300);
+                }
+                break; // Found answer, no need to try more root servers
+              }
+
+              // If we got referrals with glue records, try them
+              if (!processed.referral_servers.empty())
+              {
+                log_verbose("Got " + std::to_string(processed.referral_servers.size()) +
+                            " referral servers for NS: " + ns_name);
+
+                // Try resolving using the referred servers
+                for (const auto &referred_server : processed.referral_servers)
+                {
+                  try
+                  {
+                    auto referred_response = query_server(referred_server, ns_name, RecordType::A, false);
+                    if (!referred_response.empty())
+                    {
+                      auto referred_processed = process_response(referred_response, ns_name, RecordType::A, depth + 1);
+                      if (referred_processed.has_answer && !referred_processed.addresses.empty())
+                      {
+                        log_verbose("Resolved NS " + ns_name + " via referred server " + referred_server);
+                        ip_addresses.insert(ip_addresses.end(),
+                                            referred_processed.addresses.begin(),
+                                            referred_processed.addresses.end());
+
+                        // Cache this result
+                        if (config_.enable_caching)
+                        {
+                          ResolutionResult cache_result(referred_processed.addresses);
+                          store_in_cache(ns_name, RecordType::A, cache_result, 300);
+                        }
+                        goto next_ns; // Successfully resolved this NS, move to next
+                      }
+                    }
+                  }
+                  catch (const std::exception &e)
+                  {
+                    log_verbose("Failed to query referred server " + referred_server + ": " + e.what());
+                    continue; // Try next referred server
+                  }
+                }
+              }
+            }
+          }
+          catch (const std::exception &e)
+          {
+            log_verbose("Failed to query root server " + root_server + ": " + e.what());
+            continue; // Try next root server
+          }
+        }
       }
+
+    next_ns:;
     }
 
+    log_verbose("Resolved " + std::to_string(ip_addresses.size()) + " IP addresses for NS names");
     return ip_addresses;
   }
 
@@ -556,6 +743,25 @@ namespace dns_resolver
     catch (const std::exception &e)
     {
       log_verbose("Error parsing domain name from rdata: " + std::string(e.what()));
+      return "";
+    }
+  }
+
+  std::string Resolver::extract_domain_name_from_name_field(const std::vector<uint8_t> &name_field,
+                                                            const std::vector<uint8_t> &full_packet)
+  {
+    if (name_field.empty())
+    {
+      return "";
+    }
+
+    try
+    {
+      return parse_domain_name_with_compression(name_field, 0, full_packet);
+    }
+    catch (const std::exception &e)
+    {
+      log_verbose("Error parsing domain name from name field: " + std::string(e.what()));
       return "";
     }
   }
@@ -630,7 +836,7 @@ namespace dns_resolver
 
   std::string Resolver::extract_tld(const std::string &domain)
   {
-    // Extract TLD from domain (e.g., "google.com" -> "com")
+    // Extract TLD from domain (e.g., "example.com" -> "com")
     size_t last_dot = domain.find_last_of('.');
     if (last_dot != std::string::npos && last_dot < domain.length() - 1)
     {

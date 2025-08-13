@@ -4,6 +4,7 @@
 #include "cache.h"
 #include "packet_builder.h"
 #include "packet_parser.h"
+#include "../config/config.h"
 #include <string>
 #include <vector>
 #include <memory>
@@ -226,6 +227,15 @@ namespace dns_resolver
                                                const std::vector<uint8_t> &full_packet);
 
     /**
+     * @brief Extract domain name from DNS name field (for glue record matching)
+     * @param name_field The name field containing the domain name
+     * @param full_packet The full DNS packet (for compression pointer resolution)
+     * @return Extracted domain name or empty string if parsing fails
+     */
+    std::string extract_domain_name_from_name_field(const std::vector<uint8_t> &name_field,
+                                                    const std::vector<uint8_t> &full_packet);
+
+    /**
      * @brief Parse domain name with compression pointer support
      * @param data The data containing the domain name
      * @param start_offset Starting offset in the data
@@ -238,7 +248,7 @@ namespace dns_resolver
 
     /**
      * @brief Extract TLD from a domain name
-     * @param domain Full domain name (e.g., "google.com")
+     * @param domain Full domain name (e.g., "example.com")
      * @return TLD (e.g., "com")
      */
     std::string extract_tld(const std::string &domain);
