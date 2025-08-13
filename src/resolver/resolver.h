@@ -226,11 +226,48 @@ namespace dns_resolver
                                                const std::vector<uint8_t> &full_packet);
 
     /**
+     * @brief Parse domain name with compression pointer support
+     * @param data The data containing the domain name
+     * @param start_offset Starting offset in the data
+     * @param full_packet The full DNS packet for compression pointer resolution
+     * @return Parsed domain name
+     */
+    std::string parse_domain_name_with_compression(const std::vector<uint8_t> &data,
+                                                   size_t start_offset,
+                                                   const std::vector<uint8_t> &full_packet);
+
+    /**
      * @brief Extract TLD from a domain name
      * @param domain Full domain name (e.g., "google.com")
      * @return TLD (e.g., "com")
      */
     std::string extract_tld(const std::string &domain);
+
+    /**
+     * @brief Parse SOA (Start of Authority) record from rdata
+     * @param rdata The rdata section containing the SOA record
+     * @param full_packet The full DNS packet for compression pointer resolution
+     * @return Formatted SOA record string or empty string if parsing fails
+     */
+    std::string parse_soa_record(const std::vector<uint8_t> &rdata,
+                                 const std::vector<uint8_t> &full_packet);
+
+    /**
+     * @brief Parse SRV (Service) record from rdata
+     * @param rdata The rdata section containing the SRV record
+     * @param full_packet The full DNS packet for compression pointer resolution
+     * @return Formatted SRV record string or empty string if parsing fails
+     */
+    std::string parse_srv_record(const std::vector<uint8_t> &rdata,
+                                 const std::vector<uint8_t> &full_packet);
+
+    /**
+     * @brief Skip over a domain name in DNS data
+     * @param data The data containing the domain name
+     * @param start_pos Starting position of the domain name
+     * @return Position after the domain name
+     */
+    size_t skip_domain_name(const std::vector<uint8_t> &data, size_t start_pos);
 
     /**
      * @brief Check cache for a domain/type combination

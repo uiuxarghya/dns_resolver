@@ -247,6 +247,26 @@ namespace dns_resolver
         icon = "🏛️";
         color = colors::CYAN;
       }
+      else if (type == RecordType::CNAME)
+      {
+        icon = "🔗";
+        color = colors::BLUE;
+      }
+      else if (type == RecordType::SOA)
+      {
+        icon = "👑";
+        color = colors::YELLOW;
+      }
+      else if (type == RecordType::SRV)
+      {
+        icon = "⚙️";
+        color = colors::GREEN;
+      }
+      else if (type == RecordType::PTR)
+      {
+        icon = "🔄";
+        color = colors::CYAN;
+      }
 
       if (verbose)
       {
@@ -262,7 +282,7 @@ namespace dns_resolver
     if (verbose && !result.addresses.empty())
     {
       std::cout << "\n"
-                << colorize("✓ Resolution completed successfully!", colors::GREEN + colors::BOLD) << "\n";
+                << colorize("✅ Resolution completed successfully!", colors::GREEN + colors::BOLD) << "\n";
     }
   }
 
@@ -303,7 +323,7 @@ namespace dns_resolver
       // Show startup banner in verbose mode
       if (options.verbose)
       {
-        std::cout << colorize("🚀 DNS Resolver Resolver Starting", colors::BOLD + colors::CYAN) << "\n";
+        std::cout << colorize("🚀 DNS Resolver Starting", colors::BOLD + colors::CYAN) << "\n";
         std::cout << colorize("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", colors::GRAY) << "\n";
         std::cout << colorize("🔍 Target: ", colors::GRAY) << colorize(options.domain, colors::YELLOW + colors::BOLD) << "\n";
         std::cout << colorize("📋 Type: ", colors::GRAY) << colorize(utils::record_type_to_string(options.query_type), colors::CYAN) << "\n";
@@ -320,7 +340,7 @@ namespace dns_resolver
         }
         else
         {
-          std::cout << colorize("✓ Resolver is healthy.", colors::GREEN) << "\n";
+          std::cout << colorize("✅ Resolver is healthy.", colors::GREEN) << "\n";
         }
         std::cout << "\n";
       }
@@ -352,9 +372,9 @@ namespace dns_resolver
                                                                                                       : colors::RED;
         std::cout << colorize("🎯 Hit ratio: ", colors::GRAY)
                   << colorize(std::to_string(static_cast<int>(hit_ratio_percent)) + "%", hit_ratio_color) << "\n";
-        std::cout << colorize("✓ Hits: ", colors::GRAY)
+        std::cout << colorize("✅ Hits: ", colors::GRAY)
                   << colorize(std::to_string(stats.hit_count), colors::GREEN)
-                  << colorize(", ✗ Misses: ", colors::GRAY)
+                  << colorize(", ❌ Misses: ", colors::GRAY)
                   << colorize(std::to_string(stats.miss_count), colors::RED) << "\n";
       }
 

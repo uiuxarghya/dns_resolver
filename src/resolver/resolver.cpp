@@ -355,8 +355,17 @@ namespace dns_resolver
             if (rr.rdata.size() >= 3)
             {
               uint16_t priority = (static_cast<uint16_t>(rr.rdata[0]) << 8) | rr.rdata[1];
-              // For now, just show priority and indicate MX record
-              result.addresses.push_back(std::to_string(priority) + " (MX record - domain parsing not implemented)");
+              // Extract domain name starting from byte 2
+              std::vector<uint8_t> domain_data(rr.rdata.begin() + 2, rr.rdata.end());
+              std::string mx_domain = parse_domain_name_with_compression(domain_data, 0, response);
+              if (!mx_domain.empty())
+              {
+                result.addresses.push_back(std::to_string(priority) + " " + mx_domain);
+              }
+              else
+              {
+                result.addresses.push_back(std::to_string(priority) + " (failed to parse domain)");
+              }
             }
           }
           else if (type == RecordType::NS)
@@ -379,6 +388,34 @@ namespace dns_resolver
             if (!cname_target.empty())
             {
               result.cname_target = cname_target;
+              result.addresses.push_back(cname_target);
+            }
+          }
+          else if (type == RecordType::PTR)
+          {
+            // PTR records contain a domain name (for reverse DNS)
+            std::string ptr_domain = extract_domain_name_from_rdata(rr.rdata, response);
+            if (!ptr_domain.empty())
+            {
+              result.addresses.push_back(ptr_domain);
+            }
+          }
+          else if (type == RecordType::SOA)
+          {
+            // SOA records: MNAME RNAME SERIAL REFRESH RETRY EXPIRE MINIMUM
+            auto soa_record = parse_soa_record(rr.rdata, response);
+            if (!soa_record.empty())
+            {
+              result.addresses.push_back(soa_record);
+            }
+          }
+          else if (type == RecordType::SRV)
+          {
+            // SRV records: priority weight port target
+            auto srv_record = parse_srv_record(rr.rdata, response);
+            if (!srv_record.empty())
+            {
+              result.addresses.push_back(srv_record);
             }
           }
         }
@@ -604,6 +641,151 @@ namespace dns_resolver
 
     // If no dot found, assume it's already a TLD
     return domain;
+  }
+
+  std::string Resolver::parse_soa_record(const std::vector<uint8_t> &rdata,
+                                         const std::vector<uint8_t> &full_packet)
+  {
+    if (rdata.size() < 20)
+    { // Minimum size for SOA record
+      return "";
+    }
+
+    try
+    {
+      size_t pos = 0;
+
+      // Parse MNAME (primary name server)
+      std::string mname = parse_domain_name_with_compression(rdata, pos, full_packet);
+      if (mname.empty())
+        return "";
+
+      // Skip past the MNAME to find RNAME position
+      pos = skip_domain_name(rdata, pos);
+      if (pos >= rdata.size())
+        return "";
+
+      // Parse RNAME (responsible person email)
+      std::string rname = parse_domain_name_with_compression(rdata, pos, full_packet);
+      if (rname.empty())
+        return "";
+
+      // Skip past the RNAME to find the numeric fields
+      pos = skip_domain_name(rdata, pos);
+      if (pos + 20 > rdata.size())
+        return "";
+
+      // Parse the 5 32-bit fields: SERIAL REFRESH RETRY EXPIRE MINIMUM
+      uint32_t serial = (static_cast<uint32_t>(rdata[pos]) << 24) |
+                        (static_cast<uint32_t>(rdata[pos + 1]) << 16) |
+                        (static_cast<uint32_t>(rdata[pos + 2]) << 8) |
+                        static_cast<uint32_t>(rdata[pos + 3]);
+      pos += 4;
+
+      uint32_t refresh = (static_cast<uint32_t>(rdata[pos]) << 24) |
+                         (static_cast<uint32_t>(rdata[pos + 1]) << 16) |
+                         (static_cast<uint32_t>(rdata[pos + 2]) << 8) |
+                         static_cast<uint32_t>(rdata[pos + 3]);
+      pos += 4;
+
+      uint32_t retry = (static_cast<uint32_t>(rdata[pos]) << 24) |
+                       (static_cast<uint32_t>(rdata[pos + 1]) << 16) |
+                       (static_cast<uint32_t>(rdata[pos + 2]) << 8) |
+                       static_cast<uint32_t>(rdata[pos + 3]);
+      pos += 4;
+
+      uint32_t expire = (static_cast<uint32_t>(rdata[pos]) << 24) |
+                        (static_cast<uint32_t>(rdata[pos + 1]) << 16) |
+                        (static_cast<uint32_t>(rdata[pos + 2]) << 8) |
+                        static_cast<uint32_t>(rdata[pos + 3]);
+      pos += 4;
+
+      uint32_t minimum = (static_cast<uint32_t>(rdata[pos]) << 24) |
+                         (static_cast<uint32_t>(rdata[pos + 1]) << 16) |
+                         (static_cast<uint32_t>(rdata[pos + 2]) << 8) |
+                         static_cast<uint32_t>(rdata[pos + 3]);
+
+      // Format SOA record
+      return mname + " " + rname + " " + std::to_string(serial) + " " +
+             std::to_string(refresh) + " " + std::to_string(retry) + " " +
+             std::to_string(expire) + " " + std::to_string(minimum);
+    }
+    catch (const std::exception &e)
+    {
+      log_verbose("Error parsing SOA record: " + std::string(e.what()));
+      return "";
+    }
+  }
+
+  std::string Resolver::parse_srv_record(const std::vector<uint8_t> &rdata,
+                                         const std::vector<uint8_t> &full_packet)
+  {
+    if (rdata.size() < 7)
+    { // Minimum size: 2+2+2+1 (priority+weight+port+domain)
+      return "";
+    }
+
+    try
+    {
+      // Parse priority (2 bytes)
+      uint16_t priority = (static_cast<uint16_t>(rdata[0]) << 8) | rdata[1];
+
+      // Parse weight (2 bytes)
+      uint16_t weight = (static_cast<uint16_t>(rdata[2]) << 8) | rdata[3];
+
+      // Parse port (2 bytes)
+      uint16_t port = (static_cast<uint16_t>(rdata[4]) << 8) | rdata[5];
+
+      // Parse target domain (starting from byte 6)
+      std::vector<uint8_t> domain_data(rdata.begin() + 6, rdata.end());
+      std::string target = parse_domain_name_with_compression(domain_data, 0, full_packet);
+
+      if (target.empty())
+      {
+        return std::to_string(priority) + " " + std::to_string(weight) + " " +
+               std::to_string(port) + " (failed to parse target)";
+      }
+
+      return std::to_string(priority) + " " + std::to_string(weight) + " " +
+             std::to_string(port) + " " + target;
+    }
+    catch (const std::exception &e)
+    {
+      log_verbose("Error parsing SRV record: " + std::string(e.what()));
+      return "";
+    }
+  }
+
+  size_t Resolver::skip_domain_name(const std::vector<uint8_t> &data, size_t start_pos)
+  {
+    size_t pos = start_pos;
+
+    while (pos < data.size())
+    {
+      uint8_t length = data[pos];
+
+      if (length == 0)
+      {
+        // End of domain name
+        return pos + 1;
+      }
+
+      if ((length & 0xC0) == 0xC0)
+      {
+        // Compression pointer - skip 2 bytes and we're done
+        return pos + 2;
+      }
+
+      if (length > 63 || pos + length + 1 > data.size())
+      {
+        // Invalid label length
+        break;
+      }
+
+      pos += length + 1;
+    }
+
+    return data.size(); // Error case
   }
 
   std::optional<ResolutionResult> Resolver::check_cache(const std::string &domain, RecordType type)
