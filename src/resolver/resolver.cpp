@@ -62,6 +62,8 @@ namespace dns_resolver
 
     auto result = resolve_recursive(domain, type, root_servers, 0);
 
+    // Note: No public DNS fallback - using pure recursive resolution only
+
     auto end_time = std::chrono::steady_clock::now();
     result.resolution_time =
         std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
@@ -180,19 +182,53 @@ namespace dns_resolver
     {
       log_verbose("Querying server: " + server);
 
-      auto response = query_server(server, domain, type);
+      // For root and TLD servers, we need to query for NS records to get referrals
+      // Only query for the actual record type when we reach authoritative servers
+      RecordType query_type = type;
+      std::string query_domain = domain;
+
+      if (depth == 0 && type != RecordType::NS)
+      {
+        // At root level: query for TLD NS records (e.g., "com." for "google.com")
+        query_type = RecordType::NS;
+        query_domain = extract_tld(domain);
+        log_verbose("Querying root servers for TLD: " + query_domain);
+      }
+      else if (depth == 1 && type != RecordType::NS)
+      {
+        // At TLD level: query for domain NS records
+        query_type = RecordType::NS;
+        log_verbose("Querying TLD servers for domain NS records");
+      }
+
+      auto response = query_server(server, query_domain, query_type);
       if (response.empty())
       {
         continue;
       }
 
-      auto process_result = process_response(response, domain, type);
+      auto process_result = process_response(response, query_domain, query_type, depth);
 
       if (process_result.has_answer && !process_result.addresses.empty())
       {
-        // Found answer
-        ResolutionResult result(process_result.addresses);
-        return result;
+        // If we queried for the actual record type and got an answer, we're done
+        if (query_type == type)
+        {
+          ResolutionResult result(process_result.addresses);
+          return result;
+        }
+        // If we queried for NS records and got an answer, these ARE the referral servers
+        if (query_type == RecordType::NS)
+        {
+          log_verbose("Got NS records in answer section, extracting referral servers");
+          // The addresses contain NS names, we need to resolve them to IPs
+          auto resolved_ips = resolve_name_servers(process_result.addresses, depth + 1);
+          if (!resolved_ips.empty())
+          {
+            log_verbose("Following referral to " + std::to_string(resolved_ips.size()) + " servers");
+            return resolve_recursive(domain, type, resolved_ips, depth + 1);
+          }
+        }
       }
 
       if (!process_result.cname_target.empty())
@@ -248,7 +284,7 @@ namespace dns_resolver
   }
 
   Resolver::ProcessResult Resolver::process_response(const std::vector<uint8_t> &response,
-                                                     const std::string &domain, RecordType type)
+                                                     const std::string &domain, RecordType type, int depth)
   {
     ProcessResult result;
     (void)domain; // Mark as unused - domain is used for logging/debugging in verbose mode
@@ -300,10 +336,27 @@ namespace dns_resolver
               result.addresses.push_back(std::to_string(priority) + " (MX record - domain parsing not implemented)");
             }
           }
-          else if (type == RecordType::NS || type == RecordType::CNAME)
+          else if (type == RecordType::NS)
           {
-            // These require domain name parsing from rdata
-            result.addresses.push_back("(Domain name parsing not implemented for " + utils::record_type_to_string(type) + ")");
+            // Extract NS name from rdata
+            std::string ns_name = extract_domain_name_from_rdata(rr.rdata, response);
+            if (!ns_name.empty())
+            {
+              result.addresses.push_back(ns_name);
+            }
+            else
+            {
+              result.addresses.push_back("(Failed to parse NS name)");
+            }
+          }
+          else if (type == RecordType::CNAME)
+          {
+            // Extract CNAME target from rdata
+            std::string cname_target = extract_domain_name_from_rdata(rr.rdata, response);
+            if (!cname_target.empty())
+            {
+              result.cname_target = cname_target;
+            }
           }
         }
         else if (rr.type == RecordType::CNAME)
@@ -317,17 +370,23 @@ namespace dns_resolver
       if (!result.has_answer)
       {
         std::vector<std::string> ns_names;
+
+        // Extract NS names from authority section
         for (const auto &rr : message.authorities)
         {
           if (rr.type == RecordType::NS)
           {
-            // For now, we'll extract glue records from additional section
-            // NS name extraction from rdata would require domain name parsing
-            ns_names.push_back(rr.name); // Use the domain being delegated
+            // Try to extract NS name from rdata (simplified domain name parsing)
+            std::string ns_name = extract_domain_name_from_rdata(rr.rdata, response);
+            if (!ns_name.empty())
+            {
+              ns_names.push_back(ns_name);
+              log_verbose("Found NS: " + ns_name);
+            }
           }
         }
 
-        // Extract glue records from additional section
+        // First, try to find glue records in additional section
         for (const auto &rr : message.additionals)
         {
           if (rr.type == RecordType::A && rr.rdata.size() == 4)
@@ -346,6 +405,15 @@ namespace dns_resolver
               result.referral_servers.push_back(addr);
             }
           }
+        }
+
+        // If no glue records found, resolve NS names to IP addresses
+        if (result.referral_servers.empty() && !ns_names.empty())
+        {
+          log_verbose("No glue records found, resolving NS names");
+          auto resolved_ips = resolve_name_servers(ns_names, depth + 1);
+          result.referral_servers.insert(result.referral_servers.end(),
+                                         resolved_ips.begin(), resolved_ips.end());
         }
       }
     }
@@ -385,6 +453,78 @@ namespace dns_resolver
     }
 
     return ip_addresses;
+  }
+
+  std::string Resolver::extract_domain_name_from_rdata(const std::vector<uint8_t> &rdata,
+                                                       const std::vector<uint8_t> &full_packet)
+  {
+    (void)full_packet; // Mark as unused - would be used for compression pointer resolution
+
+    if (rdata.empty())
+    {
+      return "";
+    }
+
+    try
+    {
+      // Simple domain name parsing from rdata
+      // This is a basic implementation - a full implementation would handle compression pointers
+      std::string domain_name;
+      size_t pos = 0;
+
+      while (pos < rdata.size())
+      {
+        uint8_t length = rdata[pos];
+
+        if (length == 0)
+        {
+          // End of domain name
+          break;
+        }
+
+        if ((length & 0xC0) == 0xC0)
+        {
+          // Compression pointer - for now, we'll skip this complex case
+          // A full implementation would follow the pointer in the full packet
+          log_verbose("Compression pointer found in NS rdata - skipping");
+          break;
+        }
+
+        if (length > 63 || pos + length + 1 > rdata.size())
+        {
+          // Invalid label length
+          break;
+        }
+
+        if (!domain_name.empty())
+        {
+          domain_name += ".";
+        }
+
+        domain_name += std::string(rdata.begin() + pos + 1, rdata.begin() + pos + 1 + length);
+        pos += length + 1;
+      }
+
+      return domain_name;
+    }
+    catch (const std::exception &e)
+    {
+      log_verbose("Error parsing domain name from rdata: " + std::string(e.what()));
+      return "";
+    }
+  }
+
+  std::string Resolver::extract_tld(const std::string &domain)
+  {
+    // Extract TLD from domain (e.g., "google.com" -> "com")
+    size_t last_dot = domain.find_last_of('.');
+    if (last_dot != std::string::npos && last_dot < domain.length() - 1)
+    {
+      return domain.substr(last_dot + 1);
+    }
+
+    // If no dot found, assume it's already a TLD
+    return domain;
   }
 
   std::optional<ResolutionResult> Resolver::check_cache(const std::string &domain, RecordType type)

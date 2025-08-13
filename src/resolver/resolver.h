@@ -187,7 +187,7 @@ namespace dns_resolver
     };
 
     ProcessResult process_response(const std::vector<uint8_t> &response,
-                                   const std::string &domain, RecordType type);
+                                   const std::string &domain, RecordType type, int depth);
 
     /**
      * @brief Follow CNAME records to find the final target
@@ -215,6 +215,22 @@ namespace dns_resolver
      */
     std::vector<std::string> resolve_name_servers(const std::vector<std::string> &ns_names,
                                                   int depth);
+
+    /**
+     * @brief Extract domain name from DNS rdata (simplified parser)
+     * @param rdata The rdata section containing the domain name
+     * @param full_packet The full DNS packet (for compression pointer resolution)
+     * @return Extracted domain name or empty string if parsing fails
+     */
+    std::string extract_domain_name_from_rdata(const std::vector<uint8_t> &rdata,
+                                               const std::vector<uint8_t> &full_packet);
+
+    /**
+     * @brief Extract TLD from a domain name
+     * @param domain Full domain name (e.g., "google.com")
+     * @return TLD (e.g., "com")
+     */
+    std::string extract_tld(const std::string &domain);
 
     /**
      * @brief Check cache for a domain/type combination

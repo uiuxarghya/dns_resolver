@@ -203,17 +203,32 @@ namespace dns_resolver
     auto length_bytes = receive_exact(socket_fd, 2);
     if (length_bytes.size() != 2)
     {
+      // Debug: Check why we couldn't read the length prefix
       return {};
     }
 
     uint16_t length = (static_cast<uint16_t>(length_bytes[0]) << 8) | length_bytes[1];
-    if (length == 0 || length > max_packet_size())
+    if (length == 0)
     {
+      // Server sent zero-length response
+      return {};
+    }
+
+    if (length > max_packet_size())
+    {
+      // Response too large
       return {};
     }
 
     // Then read the actual DNS packet
-    return receive_exact(socket_fd, length);
+    auto packet = receive_exact(socket_fd, length);
+    if (packet.size() != length)
+    {
+      // Couldn't read the full packet
+      return {};
+    }
+
+    return packet;
   }
 
   bool TcpClient::send_all(int socket_fd, const std::vector<uint8_t> &data)
