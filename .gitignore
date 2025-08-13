@@ -1,1 +1,89 @@
-build
+# Build directories
+build/
+build-*/
+out/
+cmake-build-*/
+
+# Compiled binaries
+dns_resolver
+debug_test
+*.exe
+*.out
+*.app
+
+# Object files
+*.o
+*.obj
+*.lo
+*.slo
+*.ko
+*.elf
+
+# Libraries
+*.a
+*.la
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage and profiling
+*.gcov
+*.gcda
+*.gcno
+coverage/
+*.profdata
+*.profraw
+
+# Package managers
+conan.lock
+vcpkg_installed/
+
+# Documentation build
+docs/_build/
+docs/html/
+docs/latex/
+
+# Test results
+test_results/
+*.xml
+*.junit
+
+# Benchmark results
+benchmark_results/
+*.json
+
+# Core dumps
+core
+core.*
+
+# Backup files
+*.bak
+*.backup
+*~
