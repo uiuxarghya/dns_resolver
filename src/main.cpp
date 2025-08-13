@@ -192,11 +192,15 @@ namespace dns_resolver
   {
     if (!result.success)
     {
-      std::cerr << colorize("❌ Resolution failed for ", colors::RED + colors::BOLD)
-                << colorize(domain, colors::YELLOW);
+      // Error Section
+      std::cerr << "\n"
+                << colorize("❌ DNS Resolution Failed", colors::RED + colors::BOLD) << "\n";
+      std::cerr << colorize("━━━━━━━━━━━━━━━━━━━━━━━━", colors::RED) << "\n";
+      std::cerr << colorize("🎯 Domain: ", colors::GRAY) << colorize(domain, colors::YELLOW + colors::BOLD) << "\n";
+      std::cerr << colorize("📋 Type: ", colors::GRAY) << colorize(utils::record_type_to_string(type), colors::CYAN) << "\n";
       if (!result.error_message.empty())
       {
-        std::cerr << colorize(": " + result.error_message, colors::RED);
+        std::cerr << colorize("💬 Error: ", colors::GRAY) << colorize(result.error_message, colors::RED) << "\n";
       }
       std::cerr << "\n";
       return;
@@ -204,15 +208,28 @@ namespace dns_resolver
 
     if (verbose)
     {
-      std::cout << colorize("🔍 Resolution for ", colors::BLUE)
-                << colorize(domain, colors::CYAN + colors::BOLD)
-                << colorize(" (" + utils::record_type_to_string(type) + ")", colors::GRAY) << "\n";
-      std::cout << colorize("⏱️  Time taken: ", colors::GRAY)
-                << colorize(std::to_string(result.resolution_time.count()) + " ms", colors::YELLOW) << "\n";
-      std::cout << colorize("💾 From cache: ", colors::GRAY)
-                << colorize(result.from_cache ? "yes" : "no", result.from_cache ? colors::GREEN : colors::YELLOW) << "\n";
-      std::cout << colorize("📊 Records found: ", colors::GRAY)
-                << colorize(std::to_string(result.addresses.size()), colors::CYAN) << "\n\n";
+      // Query Information Section
+      std::cout << "\n"
+                << colorize("📋 Query Information", colors::BOLD + colors::BLUE) << "\n";
+      std::cout << colorize("━━━━━━━━━━━━━━━━━━━━", colors::BLUE) << "\n";
+      std::cout << colorize("🎯 Domain: ", colors::GRAY) << colorize(domain, colors::CYAN + colors::BOLD) << "\n";
+      std::cout << colorize("📝 Record Type: ", colors::GRAY) << colorize(utils::record_type_to_string(type), colors::CYAN) << "\n";
+
+      // Performance Metrics Section
+      std::cout << "\n"
+                << colorize("📊 Performance Metrics", colors::BOLD + colors::YELLOW) << "\n";
+      std::cout << colorize("━━━━━━━━━━━━━━━━━━━━━━━", colors::YELLOW) << "\n";
+      std::cout << colorize("⏱️  Resolution Time: ", colors::GRAY)
+                << colorize(std::to_string(result.resolution_time.count()) + " ms", colors::YELLOW + colors::BOLD) << "\n";
+      std::cout << colorize("💾 Cache Status: ", colors::GRAY)
+                << colorize(result.from_cache ? "HIT" : "MISS", result.from_cache ? colors::GREEN + colors::BOLD : colors::YELLOW + colors::BOLD) << "\n";
+      std::cout << colorize("🔢 Records Found: ", colors::GRAY)
+                << colorize(std::to_string(result.addresses.size()), colors::CYAN + colors::BOLD) << "\n";
+
+      // Results Section Header
+      std::cout << "\n"
+                << colorize("🎯 DNS Resolution Results", colors::BOLD + colors::GREEN) << "\n";
+      std::cout << colorize("━━━━━━━━━━━━━━━━━━━━━━━━━━", colors::GREEN) << "\n";
     }
 
     // Print results with appropriate icons and colors
@@ -220,58 +237,72 @@ namespace dns_resolver
     {
       std::string icon = "🌐";
       std::string color = colors::GREEN;
+      std::string type_label = "";
 
-      // Choose icon and color based on record type and content
+      // Choose icon, color, and label based on record type and content
       if (type == RecordType::A)
       {
         icon = "🌍";
         color = colors::GREEN;
+        type_label = "IPv4";
       }
       else if (type == RecordType::AAAA)
       {
         icon = "🌎";
         color = colors::BLUE;
+        type_label = "IPv6";
       }
       else if (type == RecordType::TXT)
       {
         icon = "📝";
         color = colors::YELLOW;
+        type_label = "Text";
       }
       else if (type == RecordType::MX)
       {
         icon = "📧";
         color = colors::MAGENTA;
+        type_label = "Mail";
       }
       else if (type == RecordType::NS)
       {
         icon = "🏛️";
         color = colors::CYAN;
+        type_label = "NameServer";
       }
       else if (type == RecordType::CNAME)
       {
         icon = "🔗";
         color = colors::BLUE;
+        type_label = "Alias";
       }
       else if (type == RecordType::SOA)
       {
         icon = "👑";
         color = colors::YELLOW;
+        type_label = "Authority";
       }
       else if (type == RecordType::SRV)
       {
         icon = "⚙️";
         color = colors::GREEN;
+        type_label = "Service";
       }
       else if (type == RecordType::PTR)
       {
         icon = "🔄";
         color = colors::CYAN;
+        type_label = "Pointer";
       }
 
       if (verbose)
       {
-        std::cout << colorize("  " + icon + " ", color)
-                  << colorize(result.addresses[i], colors::WHITE + colors::BOLD) << "\n";
+        std::cout << colorize("  " + icon + " ", color);
+        if (!type_label.empty())
+        {
+          std::cout << colorize("[" + type_label + "] ", colors::GRAY);
+        }
+        std::cout << colorize(result.addresses[i], colors::WHITE + colors::BOLD) << "\n";
       }
       else
       {
@@ -279,10 +310,28 @@ namespace dns_resolver
       }
     }
 
-    if (verbose && !result.addresses.empty())
+    if (verbose)
     {
-      std::cout << "\n"
-                << colorize("✅ Resolution completed successfully!", colors::GREEN + colors::BOLD) << "\n";
+      if (!result.addresses.empty())
+      {
+        std::cout << "\n"
+                  << colorize("✅ Resolution Status", colors::BOLD + colors::GREEN) << "\n";
+        std::cout << colorize("━━━━━━━━━━━━━━━━━━━", colors::GREEN) << "\n";
+        std::cout << colorize("🎉 Successfully resolved ", colors::GREEN)
+                  << colorize(std::to_string(result.addresses.size()), colors::GREEN + colors::BOLD)
+                  << colorize(" record(s) for ", colors::GREEN)
+                  << colorize(domain, colors::CYAN + colors::BOLD) << "\n";
+      }
+      else
+      {
+        std::cout << "\n"
+                  << colorize("⚠️  No Records Found", colors::BOLD + colors::YELLOW) << "\n";
+        std::cout << colorize("━━━━━━━━━━━━━━━━━━━━", colors::YELLOW) << "\n";
+        std::cout << colorize("🔍 No ", colors::YELLOW)
+                  << colorize(utils::record_type_to_string(type), colors::CYAN)
+                  << colorize(" records found for ", colors::YELLOW)
+                  << colorize(domain, colors::CYAN + colors::BOLD) << "\n";
+      }
     }
   }
 
@@ -323,26 +372,42 @@ namespace dns_resolver
       // Show startup banner in verbose mode
       if (options.verbose)
       {
-        std::cout << colorize("🚀 DNS Resolver Starting", colors::BOLD + colors::CYAN) << "\n";
-        std::cout << colorize("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", colors::GRAY) << "\n";
-        std::cout << colorize("🔍 Target: ", colors::GRAY) << colorize(options.domain, colors::YELLOW + colors::BOLD) << "\n";
-        std::cout << colorize("📋 Type: ", colors::GRAY) << colorize(utils::record_type_to_string(options.query_type), colors::CYAN) << "\n";
-        std::cout << colorize("⏱️  Timeout: ", colors::GRAY) << colorize(std::to_string(options.timeout.count()) + "s", colors::YELLOW) << "\n\n";
+        std::cout << "\n"
+                  << colorize("🚀 DNS Resolver", colors::BOLD + colors::CYAN) << "\n";
+        std::cout << colorize("━━━━━━━━━━━━━━━━━━━━━━━━", colors::CYAN) << "\n";
+        std::cout << colorize("🎯 Target Domain: ", colors::GRAY) << colorize(options.domain, colors::YELLOW + colors::BOLD) << "\n";
+
+        if (options.resolve_all)
+        {
+          std::cout << colorize("📋 Query Types: ", colors::GRAY) << colorize("A + AAAA", colors::CYAN + colors::BOLD) << "\n";
+        }
+        else
+        {
+          std::cout << colorize("📋 Query Type: ", colors::GRAY) << colorize(utils::record_type_to_string(options.query_type), colors::CYAN + colors::BOLD) << "\n";
+        }
+
+        std::cout << colorize("⏱️  Timeout: ", colors::GRAY) << colorize(std::to_string(options.timeout.count()) + "s", colors::YELLOW + colors::BOLD) << "\n";
+        std::cout << colorize("🔧 Mode: ", colors::GRAY) << colorize("Recursive Resolution", colors::GREEN + colors::BOLD) << "\n";
       }
 
       // Check if resolver is healthy
       if (options.verbose)
       {
-        std::cout << colorize("🏥 Checking resolver health...", colors::BLUE) << "\n";
+        std::cout << "\n"
+                  << colorize("🏥 System Health Check", colors::BOLD + colors::BLUE) << "\n";
+        std::cout << colorize("━━━━━━━━━━━━━━━━━━━━━", colors::BLUE) << "\n";
+        std::cout << colorize("🔍 Checking connectivity to root servers...", colors::GRAY) << "\n";
+
         if (!resolver.is_healthy())
         {
-          std::cerr << colorize("⚠️  Warning: Cannot reach root servers. Resolution may fail.", colors::YELLOW + colors::BOLD) << "\n";
+          std::cout << colorize("⚠️  Status: ", colors::GRAY) << colorize("LIMITED", colors::YELLOW + colors::BOLD) << "\n";
+          std::cout << colorize("💬 Note: ", colors::GRAY) << colorize("Cannot reach all root servers. Resolution may be slower.", colors::YELLOW) << "\n";
         }
         else
         {
-          std::cout << colorize("✅ Resolver is healthy.", colors::GREEN) << "\n";
+          std::cout << colorize("✅ Status: ", colors::GRAY) << colorize("HEALTHY", colors::GREEN + colors::BOLD) << "\n";
+          std::cout << colorize("💬 Note: ", colors::GRAY) << colorize("All systems operational.", colors::GREEN) << "\n";
         }
-        std::cout << "\n";
       }
 
       // Perform resolution
@@ -362,20 +427,56 @@ namespace dns_resolver
       {
         auto stats = resolver.get_cache_stats();
         std::cout << "\n"
-                  << colorize("📈 Cache Statistics", colors::BOLD + colors::BLUE) << "\n";
-        std::cout << colorize("━━━━━━━━━━━━━━━━━━", colors::GRAY) << "\n";
-        std::cout << colorize("📦 Total entries: ", colors::GRAY)
-                  << colorize(std::to_string(stats.total_entries), colors::CYAN) << "\n";
+                  << colorize("📈 Cache Performance", colors::BOLD + colors::MAGENTA) << "\n";
+        std::cout << colorize("━━━━━━━━━━━━━━━━━━━━", colors::MAGENTA) << "\n";
+
+        std::cout << colorize("📦 Cache Entries: ", colors::GRAY)
+                  << colorize(std::to_string(stats.total_entries), colors::CYAN + colors::BOLD) << "\n";
 
         double hit_ratio_percent = stats.hit_ratio * 100.0;
-        std::string hit_ratio_color = hit_ratio_percent > 50 ? colors::GREEN : hit_ratio_percent > 20 ? colors::YELLOW
-                                                                                                      : colors::RED;
-        std::cout << colorize("🎯 Hit ratio: ", colors::GRAY)
-                  << colorize(std::to_string(static_cast<int>(hit_ratio_percent)) + "%", hit_ratio_color) << "\n";
-        std::cout << colorize("✅ Hits: ", colors::GRAY)
-                  << colorize(std::to_string(stats.hit_count), colors::GREEN)
-                  << colorize(", ❌ Misses: ", colors::GRAY)
-                  << colorize(std::to_string(stats.miss_count), colors::RED) << "\n";
+        std::string hit_ratio_color = hit_ratio_percent > 70 ? colors::GREEN + colors::BOLD : hit_ratio_percent > 40 ? colors::YELLOW + colors::BOLD
+                                                                                                                     : colors::RED + colors::BOLD;
+
+        std::cout << colorize("🎯 Hit Ratio: ", colors::GRAY)
+                  << colorize(std::to_string(static_cast<int>(hit_ratio_percent)) + "%", hit_ratio_color);
+
+        // Add performance indicator
+        if (hit_ratio_percent > 70)
+        {
+          std::cout << colorize(" (Excellent)", colors::GREEN);
+        }
+        else if (hit_ratio_percent > 40)
+        {
+          std::cout << colorize(" (Good)", colors::YELLOW);
+        }
+        else if (stats.hit_count + stats.miss_count > 0)
+        {
+          std::cout << colorize(" (Poor)", colors::RED);
+        }
+        std::cout << "\n";
+
+        std::cout << colorize("✅ Cache Hits: ", colors::GRAY)
+                  << colorize(std::to_string(stats.hit_count), colors::GREEN + colors::BOLD) << "\n";
+        std::cout << colorize("❌ Cache Misses: ", colors::GRAY)
+                  << colorize(std::to_string(stats.miss_count), colors::RED + colors::BOLD) << "\n";
+
+        // Add efficiency note
+        if (stats.hit_count + stats.miss_count > 0)
+        {
+          std::cout << colorize("💡 Efficiency: ", colors::GRAY);
+          if (hit_ratio_percent > 70)
+          {
+            std::cout << colorize("Cache is performing excellently", colors::GREEN) << "\n";
+          }
+          else if (hit_ratio_percent > 40)
+          {
+            std::cout << colorize("Cache is working well", colors::YELLOW) << "\n";
+          }
+          else
+          {
+            std::cout << colorize("Consider increasing cache size", colors::RED) << "\n";
+          }
+        }
       }
 
       return 0;
