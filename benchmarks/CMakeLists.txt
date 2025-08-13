@@ -70,6 +70,11 @@ set_target_properties(dns_resolver_benchmark PROPERTIES
     CXX_EXTENSIONS OFF
 )
 
+# Add compiler-specific flags for benchmarks
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(dns_resolver_benchmark PRIVATE -Wno-restrict)
+endif()
+
 # Custom benchmark targets
 add_custom_target(run_benchmarks
     COMMAND ${CMAKE_CURRENT_BINARY_DIR}/dns_resolver_benchmark --benchmark_out=benchmark_results.json --benchmark_out_format=json

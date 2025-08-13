@@ -87,9 +87,9 @@ namespace dns_resolver
     DnsCache(const DnsCache &) = delete;
     DnsCache &operator=(const DnsCache &) = delete;
 
-    // Enable move constructor and assignment operator
-    DnsCache(DnsCache &&) = default;
-    DnsCache &operator=(DnsCache &&) = default;
+    // Disable move constructor and assignment operator (due to std::shared_mutex)
+    DnsCache(DnsCache &&) = delete;
+    DnsCache &operator=(DnsCache &&) = delete;
 
     /**
      * @brief Get a cache entry by key

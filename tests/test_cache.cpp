@@ -231,7 +231,7 @@ TEST_F(CacheTest, ThreadSafety)
   // Launch multiple threads doing cache operations
   for (int t = 0; t < num_threads; ++t)
   {
-    threads.emplace_back([&large_cache, &successful_operations, t, operations_per_thread]()
+    threads.emplace_back([&large_cache, &successful_operations, t]()
                          {
       for (int i = 0; i < operations_per_thread; ++i) {
         try {

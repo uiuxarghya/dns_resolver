@@ -75,6 +75,11 @@ set_target_properties(dns_resolver_tests PROPERTIES
     CXX_EXTENSIONS OFF
 )
 
+# Add compiler-specific flags for tests
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(dns_resolver_tests PRIVATE -Wno-restrict)
+endif()
+
 # Discover and register tests
 include(GoogleTest)
 gtest_discover_tests(dns_resolver_tests)
