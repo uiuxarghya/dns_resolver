@@ -1,25 +1,24 @@
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "../src/resolver/cache.h"
-#include <thread>
+#include <gtest/gtest.h>
+
 #include <chrono>
+#include <thread>
+
+#include "../src/resolver/cache.h"
 
 using namespace dns_resolver;
 
-class CacheTest : public ::testing::Test
-{
+class CacheTest : public ::testing::Test {
 protected:
-  void SetUp() override
-  {
-    cache_ = std::make_unique<DnsCache>(100); // Max 100 entries
+  void SetUp() override {
+    cache_ = std::make_unique<DnsCache>(100);  // Max 100 entries
   }
 
   std::unique_ptr<DnsCache> cache_;
 };
 
-TEST_F(CacheTest, BasicPutAndGet)
-{
-  std::string key = "example.com:1:1"; // domain:type:class
+TEST_F(CacheTest, BasicPutAndGet) {
+  std::string key = "example.com:1:1";  // domain:type:class
   CacheEntry entry({"192.168.1.1"}, 300, RecordType::A);
 
   cache_->put(key, entry);
@@ -32,16 +31,14 @@ TEST_F(CacheTest, BasicPutAndGet)
   EXPECT_FALSE(retrieved->is_negative);
 }
 
-TEST_F(CacheTest, GetNonExistentKey)
-{
+TEST_F(CacheTest, GetNonExistentKey) {
   auto result = cache_->get("nonexistent.com:1:1");
   EXPECT_FALSE(result.has_value());
 }
 
-TEST_F(CacheTest, TTLExpiration)
-{
+TEST_F(CacheTest, TTLExpiration) {
   std::string key = "short-ttl.com:1:1";
-  CacheEntry entry({"1.2.3.4"}, 1, RecordType::A); // 1 second TTL
+  CacheEntry entry({"1.2.3.4"}, 1, RecordType::A);  // 1 second TTL
 
   cache_->put(key, entry);
 
@@ -57,14 +54,13 @@ TEST_F(CacheTest, TTLExpiration)
   EXPECT_FALSE(result2.has_value());
 }
 
-TEST_F(CacheTest, RemainingTTL)
-{
+TEST_F(CacheTest, RemainingTTL) {
   CacheEntry entry({"1.2.3.4"}, 10, RecordType::A);
 
   // Check initial TTL (allow for small timing variations)
   uint32_t initial_ttl = entry.get_remaining_ttl();
   EXPECT_LE(initial_ttl, 10u);
-  EXPECT_GE(initial_ttl, 9u); // Allow up to 1 second variation
+  EXPECT_GE(initial_ttl, 9u);  // Allow up to 1 second variation
 
   // Wait a bit and check again
   std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -73,8 +69,7 @@ TEST_F(CacheTest, RemainingTTL)
   EXPECT_GT(remaining, 0u);
 }
 
-TEST_F(CacheTest, NegativeCache)
-{
+TEST_F(CacheTest, NegativeCache) {
   std::string key = "nonexistent.com:1:1";
   CacheEntry negative_entry({}, 300, RecordType::A, true);
 
@@ -86,11 +81,9 @@ TEST_F(CacheTest, NegativeCache)
   EXPECT_TRUE(result->records.empty());
 }
 
-TEST_F(CacheTest, LRUEviction)
-{
+TEST_F(CacheTest, LRUEviction) {
   // Fill cache to capacity
-  for (int i = 0; i < 100; ++i)
-  {
+  for (int i = 0; i < 100; ++i) {
     std::string key = "domain" + std::to_string(i) + ".com:1:1";
     CacheEntry entry({"1.2.3." + std::to_string(i)}, 3600, RecordType::A);
     cache_->put(key, entry);
@@ -102,7 +95,7 @@ TEST_F(CacheTest, LRUEviction)
   CacheEntry new_entry({"9.9.9.9"}, 3600, RecordType::A);
   cache_->put("new-domain.com:1:1", new_entry);
 
-  EXPECT_EQ(cache_->size(), 100u); // Size should remain at max
+  EXPECT_EQ(cache_->size(), 100u);  // Size should remain at max
 
   // The first entry should be evicted
   auto result = cache_->get("domain0.com:1:1");
@@ -113,8 +106,7 @@ TEST_F(CacheTest, LRUEviction)
   EXPECT_TRUE(new_result.has_value());
 }
 
-TEST_F(CacheTest, UpdateExistingEntry)
-{
+TEST_F(CacheTest, UpdateExistingEntry) {
   std::string key = "update-test.com:1:1";
 
   // Add initial entry
@@ -132,8 +124,7 @@ TEST_F(CacheTest, UpdateExistingEntry)
   EXPECT_EQ(result->records[1], "3.3.3.3");
 }
 
-TEST_F(CacheTest, RemoveEntry)
-{
+TEST_F(CacheTest, RemoveEntry) {
   std::string key = "remove-test.com:1:1";
   CacheEntry entry({"4.4.4.4"}, 300, RecordType::A);
 
@@ -149,11 +140,9 @@ TEST_F(CacheTest, RemoveEntry)
   EXPECT_FALSE(removed_again);
 }
 
-TEST_F(CacheTest, ClearCache)
-{
+TEST_F(CacheTest, ClearCache) {
   // Add several entries
-  for (int i = 0; i < 10; ++i)
-  {
+  for (int i = 0; i < 10; ++i) {
     std::string key = "clear-test" + std::to_string(i) + ".com:1:1";
     CacheEntry entry({"1.2.3." + std::to_string(i)}, 300, RecordType::A);
     cache_->put(key, entry);
@@ -167,11 +156,10 @@ TEST_F(CacheTest, ClearCache)
   EXPECT_TRUE(cache_->empty());
 }
 
-TEST_F(CacheTest, CleanupExpired)
-{
+TEST_F(CacheTest, CleanupExpired) {
   // Add entries with different TTLs
-  CacheEntry short_entry({"1.1.1.1"}, 1, RecordType::A);   // 1 second
-  CacheEntry long_entry({"2.2.2.2"}, 3600, RecordType::A); // 1 hour
+  CacheEntry short_entry({"1.1.1.1"}, 1, RecordType::A);    // 1 second
+  CacheEntry long_entry({"2.2.2.2"}, 3600, RecordType::A);  // 1 hour
 
   cache_->put("short.com:1:1", short_entry);
   cache_->put("long.com:1:1", long_entry);
@@ -190,8 +178,7 @@ TEST_F(CacheTest, CleanupExpired)
   EXPECT_FALSE(cache_->get("short.com:1:1").has_value());
 }
 
-TEST_F(CacheTest, CacheStatistics)
-{
+TEST_F(CacheTest, CacheStatistics) {
   auto initial_stats = cache_->get_stats();
   EXPECT_EQ(initial_stats.hit_count, 0u);
   EXPECT_EQ(initial_stats.miss_count, 0u);
@@ -217,22 +204,19 @@ TEST_F(CacheTest, CacheStatistics)
   EXPECT_EQ(reset_stats.miss_count, 0u);
 }
 
-TEST_F(CacheTest, ThreadSafety)
-{
+TEST_F(CacheTest, ThreadSafety) {
   // Use a larger cache to accommodate concurrent operations
   auto large_cache = std::make_unique<DnsCache>(2000);
 
-  const int num_threads = 4;            // Reduced to avoid memory pressure
-  const int operations_per_thread = 50; // Reduced operations
+  const int num_threads = 4;             // Reduced to avoid memory pressure
+  const int operations_per_thread = 50;  // Reduced operations
 
   std::vector<std::thread> threads;
   std::atomic<int> successful_operations{0};
 
   // Launch multiple threads doing cache operations
-  for (int t = 0; t < num_threads; ++t)
-  {
-    threads.emplace_back([&large_cache, &successful_operations, t]()
-                         {
+  for (int t = 0; t < num_threads; ++t) {
+    threads.emplace_back([&large_cache, &successful_operations, t]() {
       for (int i = 0; i < operations_per_thread; ++i) {
         try {
           std::string key = "thread" + std::to_string(t) + "-" + std::to_string(i) + ".com:1:1";
@@ -247,23 +231,23 @@ TEST_F(CacheTest, ThreadSafety)
           // Log but don't fail the test for memory allocation issues
           std::cerr << "Thread " << t << " operation " << i << " failed: " << e.what() << std::endl;
         }
-      } });
+      }
+    });
   }
 
   // Wait for all threads to complete
-  for (auto &thread : threads)
-  {
+  for (auto& thread : threads) {
     thread.join();
   }
 
   // Cache should have entries from threads and most operations should succeed
   EXPECT_GT(large_cache->size(), 0u);
-  EXPECT_GT(successful_operations.load(), num_threads * operations_per_thread / 2); // At least 50% success
+  EXPECT_GT(successful_operations.load(),
+            num_threads * operations_per_thread / 2);  // At least 50% success
 }
 
 // Test cache utility functions
-TEST(CacheUtilsTest, GenerateCacheKey)
-{
+TEST(CacheUtilsTest, GenerateCacheKey) {
   auto key1 = cache_utils::generate_cache_key("Example.COM", RecordType::A, RecordClass::IN);
   auto key2 = cache_utils::generate_cache_key("example.com", RecordType::A, RecordClass::IN);
 
@@ -272,8 +256,7 @@ TEST(CacheUtilsTest, GenerateCacheKey)
   EXPECT_EQ(key1, "example.com:1:1");
 }
 
-TEST(CacheUtilsTest, ParseCacheKey)
-{
+TEST(CacheUtilsTest, ParseCacheKey) {
   std::string domain;
   RecordType type;
   RecordClass cls;
@@ -286,8 +269,7 @@ TEST(CacheUtilsTest, ParseCacheKey)
   EXPECT_EQ(cls, RecordClass::IN);
 }
 
-TEST(CacheUtilsTest, ParseInvalidCacheKey)
-{
+TEST(CacheUtilsTest, ParseInvalidCacheKey) {
   std::string domain;
   RecordType type;
   RecordClass cls;
@@ -296,8 +278,7 @@ TEST(CacheUtilsTest, ParseInvalidCacheKey)
   EXPECT_FALSE(success);
 }
 
-TEST(CacheUtilsTest, CreateCacheEntryFromRecords)
-{
+TEST(CacheUtilsTest, CreateCacheEntryFromRecords) {
   std::vector<ResourceRecord> records;
 
   ResourceRecord rr1("test.com", RecordType::A, RecordClass::IN, 300);
@@ -312,11 +293,10 @@ TEST(CacheUtilsTest, CreateCacheEntryFromRecords)
 
   EXPECT_FALSE(entry.is_negative);
   EXPECT_EQ(entry.record_type, RecordType::A);
-  EXPECT_EQ(entry.original_ttl, 300u); // Should use minimum TTL
+  EXPECT_EQ(entry.original_ttl, 300u);  // Should use minimum TTL
 }
 
-TEST(CacheUtilsTest, CreateNegativeCacheEntry)
-{
+TEST(CacheUtilsTest, CreateNegativeCacheEntry) {
   auto entry = cache_utils::create_negative_cache_entry(300, RecordType::A);
 
   EXPECT_TRUE(entry.is_negative);

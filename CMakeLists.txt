@@ -35,7 +35,13 @@ find_package(Threads REQUIRED)
 # Source files
 set(DNSRESOLVER_SOURCES
     src/main.cpp
+    src/cli/cli_parser.cpp
+    src/cli/application.cpp
+    src/cli/output_formatter.cpp
     src/resolver/resolver.cpp
+    src/resolver/query_engine.cpp
+    src/resolver/response_processor.cpp
+    src/resolver/recursion_handler.cpp
     src/resolver/packet_builder.cpp
     src/resolver/packet_parser.cpp
     src/resolver/cache.cpp

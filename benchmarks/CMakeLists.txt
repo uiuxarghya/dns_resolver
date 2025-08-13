@@ -54,6 +54,9 @@ target_include_directories(dns_resolver_benchmark
 target_sources(dns_resolver_benchmark
     PRIVATE
     ${CMAKE_SOURCE_DIR}/src/resolver/resolver.cpp
+    ${CMAKE_SOURCE_DIR}/src/resolver/query_engine.cpp
+    ${CMAKE_SOURCE_DIR}/src/resolver/response_processor.cpp
+    ${CMAKE_SOURCE_DIR}/src/resolver/recursion_handler.cpp
     ${CMAKE_SOURCE_DIR}/src/resolver/packet_builder.cpp
     ${CMAKE_SOURCE_DIR}/src/resolver/packet_parser.cpp
     ${CMAKE_SOURCE_DIR}/src/resolver/cache.cpp
