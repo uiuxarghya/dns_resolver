@@ -10,6 +10,9 @@
 #include <cstring>
 #include <stdexcept>
 #include <cerrno>
+#include <iostream>
+#include <thread>
+#include <chrono>
 
 namespace dns_resolver
 {
@@ -75,6 +78,9 @@ namespace dns_resolver
         close_socket(sock);
         throw NetworkException("Failed to send TCP packet");
       }
+
+      // Give the server a moment to process the request
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
       // Receive response
       auto response = receive_tcp_packet(sock);
@@ -189,9 +195,10 @@ namespace dns_resolver
     std::vector<uint8_t> tcp_packet;
     tcp_packet.reserve(packet.size() + 2);
 
-    uint16_t length = htons(static_cast<uint16_t>(packet.size()));
-    tcp_packet.push_back(static_cast<uint8_t>(length >> 8));
-    tcp_packet.push_back(static_cast<uint8_t>(length & 0xFF));
+    // DNS TCP length is in network byte order (big-endian)
+    uint16_t length = static_cast<uint16_t>(packet.size());
+    tcp_packet.push_back(static_cast<uint8_t>(length >> 8));   // High byte first
+    tcp_packet.push_back(static_cast<uint8_t>(length & 0xFF)); // Low byte second
     tcp_packet.insert(tcp_packet.end(), packet.begin(), packet.end());
 
     return send_all(socket_fd, tcp_packet);
@@ -203,11 +210,11 @@ namespace dns_resolver
     auto length_bytes = receive_exact(socket_fd, 2);
     if (length_bytes.size() != 2)
     {
-      // Debug: Check why we couldn't read the length prefix
       return {};
     }
 
     uint16_t length = (static_cast<uint16_t>(length_bytes[0]) << 8) | length_bytes[1];
+
     if (length == 0)
     {
       // Server sent zero-length response
