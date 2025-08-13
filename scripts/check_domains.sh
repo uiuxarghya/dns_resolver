@@ -140,8 +140,8 @@ if [ $total_domains -gt 0 ]; then
 fi
 
 # Add summary to summary file
-echo "" >> "$SUMMARY_FILE"
 echo "Test completed at: $(date)" >> "$SUMMARY_FILE"
+echo "" >> "$SUMMARY_FILE"
 echo "Total domains tested: $total_domains" >> "$SUMMARY_FILE"
 echo "Successful resolutions: $successful_domains" >> "$SUMMARY_FILE"
 echo "Failed resolutions: $failed_domains" >> "$SUMMARY_FILE"

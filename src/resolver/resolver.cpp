@@ -195,9 +195,29 @@ namespace dns_resolver
       }
       else if (depth == 1 && type != RecordType::NS)
       {
-        // At TLD level: query for domain NS records
+        // At TLD level: try querying for the actual record type first
+        // Many modern hosting providers (Wix, AWS, etc.) return direct answers from TLD servers
+        log_verbose("Querying TLD servers for direct answer first");
+        auto direct_response = query_server(server, domain, type);
+        if (!direct_response.empty())
+        {
+          auto direct_result = process_response(direct_response, domain, type, depth);
+          if (direct_result.has_answer && !direct_result.addresses.empty())
+          {
+            log_verbose("Got direct answer from TLD server");
+            ResolutionResult result(direct_result.addresses);
+            return result;
+          }
+          if (!direct_result.cname_target.empty())
+          {
+            log_verbose("Got CNAME from TLD server: " + direct_result.cname_target);
+            return follow_cname(direct_result.cname_target, type, depth + 1);
+          }
+        }
+
+        // If no direct answer, fall back to querying for NS records
         query_type = RecordType::NS;
-        log_verbose("Querying TLD servers for domain NS records");
+        log_verbose("No direct answer, querying TLD servers for domain NS records");
       }
 
       auto response = query_server(server, query_domain, query_type);
