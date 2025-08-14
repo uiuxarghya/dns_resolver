@@ -232,13 +232,37 @@ std::vector<std::string> RecursionHandler::select_best_servers(
     return servers;
   }
 
-  // Randomly select servers to distribute load
-  std::vector<std::string> shuffled = servers;
+  // Separate IPv4 and IPv6 servers
+  std::vector<std::string> ipv4_servers;
+  std::vector<std::string> ipv6_servers;
+
+  for (const auto& server : servers) {
+    if (server.find(':') != std::string::npos) {
+      ipv6_servers.push_back(server);
+    } else {
+      ipv4_servers.push_back(server);
+    }
+  }
+
+  // Prefer IPv4 servers if available, then add IPv6 servers
+  // This ensures better compatibility in environments with limited IPv6 connectivity
+  std::vector<std::string> prioritized_servers;
+  prioritized_servers.insert(prioritized_servers.end(), ipv4_servers.begin(), ipv4_servers.end());
+  prioritized_servers.insert(prioritized_servers.end(), ipv6_servers.begin(), ipv6_servers.end());
+
+  // Randomly shuffle within each group to maintain load distribution
   std::random_device rd;
   std::mt19937 g(rd());
-  std::shuffle(shuffled.begin(), shuffled.end(), g);
 
-  selected.assign(shuffled.begin(), shuffled.begin() + max_servers);
+  if (!ipv4_servers.empty()) {
+    std::shuffle(prioritized_servers.begin(), prioritized_servers.begin() + ipv4_servers.size(), g);
+  }
+  if (!ipv6_servers.empty()) {
+    std::shuffle(prioritized_servers.begin() + ipv4_servers.size(), prioritized_servers.end(), g);
+  }
+
+  selected.assign(prioritized_servers.begin(),
+                  prioritized_servers.begin() + std::min(max_servers, prioritized_servers.size()));
   return selected;
 }
 
