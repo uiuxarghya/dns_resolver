@@ -249,33 +249,93 @@ std::vector<std::string> extract_aaaa_records(const std::vector<uint8_t> &packet
 }
 
 std::vector<std::string> extract_cname_records(const std::vector<uint8_t> &packet) {
-  // TODO: Implement CNAME extraction
-  (void)packet;  // Mark as unused
-  return {};
+  try {
+    PacketParser parser(packet);
+    auto message = parser.parse();
+    std::vector<std::string> cnames;
+    for (const auto &rr : message.answers) {
+      if (rr.type == RecordType::CNAME) {
+        // CNAME rdata is a domain name
+        PacketParser name_parser(rr.rdata);
+        cnames.push_back(name_parser.decode_name());
+      }
+    }
+    return cnames;
+  } catch (...) {
+    return {};
+  }
 }
 
 std::vector<std::string> extract_ns_records(const std::vector<uint8_t> &packet) {
-  // TODO: Implement NS extraction
-  (void)packet;  // Mark as unused
-  return {};
+  try {
+    PacketParser parser(packet);
+    auto message = parser.parse();
+    std::vector<std::string> nss;
+    for (const auto &rr : message.answers) {
+      if (rr.type == RecordType::NS) {
+        PacketParser name_parser(rr.rdata);
+        nss.push_back(name_parser.decode_name());
+      }
+    }
+    return nss;
+  } catch (...) {
+    return {};
+  }
 }
 
 std::vector<std::string> extract_authority_ns_records(const std::vector<uint8_t> &packet) {
-  // TODO: Implement authority NS extraction
-  (void)packet;  // Mark as unused
-  return {};
+  try {
+    PacketParser parser(packet);
+    auto message = parser.parse();
+    std::vector<std::string> nss;
+    for (const auto &rr : message.authorities) {
+      if (rr.type == RecordType::NS) {
+        PacketParser name_parser(rr.rdata);
+        nss.push_back(name_parser.decode_name());
+      }
+    }
+    return nss;
+  } catch (...) {
+    return {};
+  }
 }
 
 std::vector<std::string> extract_additional_a_records(const std::vector<uint8_t> &packet) {
-  // TODO: Implement additional A record extraction
-  (void)packet;  // Mark as unused
-  return {};
+  try {
+    PacketParser parser(packet);
+    auto message = parser.parse();
+    std::vector<std::string> addresses;
+    for (const auto &rr : message.additionals) {
+      if (rr.type == RecordType::A) {
+        auto addr = rr.get_a_record();
+        if (!addr.empty()) {
+          addresses.push_back(addr);
+        }
+      }
+    }
+    return addresses;
+  } catch (...) {
+    return {};
+  }
 }
 
 std::vector<std::string> extract_additional_aaaa_records(const std::vector<uint8_t> &packet) {
-  // TODO: Implement additional AAAA record extraction
-  (void)packet;  // Mark as unused
-  return {};
+  try {
+    PacketParser parser(packet);
+    auto message = parser.parse();
+    std::vector<std::string> addresses;
+    for (const auto &rr : message.additionals) {
+      if (rr.type == RecordType::AAAA) {
+        auto addr = rr.get_aaaa_record();
+        if (!addr.empty()) {
+          addresses.push_back(addr);
+        }
+      }
+    }
+    return addresses;
+  } catch (...) {
+    return {};
+  }
 }
 
 bool validate_packet_structure(const std::vector<uint8_t> &packet) {
@@ -289,9 +349,18 @@ bool validate_packet_structure(const std::vector<uint8_t> &packet) {
 }
 
 std::string describe_packet(const std::vector<uint8_t> &packet) {
-  // TODO: Implement packet description
-  (void)packet;  // Mark as unused
-  return "DNS packet description not implemented";
+  try {
+    PacketParser parser(packet);
+    auto message = parser.parse();
+    std::string desc = "ID: " + std::to_string(message.header.id) + ", ";
+    desc += "Questions: " + std::to_string(message.header.qdcount) + ", ";
+    desc += "Answers: " + std::to_string(message.header.ancount) + ", ";
+    desc += "Authorities: " + std::to_string(message.header.nscount) + ", ";
+    desc += "Additionals: " + std::to_string(message.header.arcount);
+    return desc;
+  } catch (...) {
+    return "Invalid DNS packet";
+  }
 }
 
 }  // namespace packet_parsers

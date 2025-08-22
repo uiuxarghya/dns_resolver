@@ -50,7 +50,7 @@ int Application::run_resolver(const CliOptions &options) {
 
       if (options.resolve_all) {
         std::cout << OutputFormatter::colorize("☰ Query Types: ", colors::GRAY)
-                  << OutputFormatter::colorize("A + AAAA", colors::CYAN + colors::BOLD) << "\n";
+                  << OutputFormatter::colorize("ALL", colors::CYAN + colors::BOLD) << "\n";
       } else {
         std::cout << OutputFormatter::colorize("☰ Query Type: ", colors::GRAY)
                   << OutputFormatter::colorize(utils::record_type_to_string(options.query_type),

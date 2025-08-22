@@ -17,13 +17,17 @@ Resolver::Resolver() : Resolver(ResolverConfig{}) {}
 
 Resolver::Resolver(const ResolverConfig &config)
     : config_(config),
-      cache_(std::make_unique<DnsCache>(config.max_cache_size)),
+      cache_(std::make_unique<DnsCache>(config.max_cache_size, "./cache.txt")),
       udp_client_(std::make_unique<UdpClient>(config.query_timeout)),
       tcp_client_(std::make_unique<TcpClient>(config.query_timeout)),
       query_engine_(std::make_shared<QueryEngine>(config)),
       response_processor_(std::make_shared<ResponseProcessor>(config)),
       recursion_handler_(
-          std::make_shared<RecursionHandler>(config, query_engine_, response_processor_)) {}
+          std::make_shared<RecursionHandler>(config, query_engine_, response_processor_)) {
+  if (cache_) {
+    cache_->load_from_file("./cache.txt");
+  }
+}
 
 Resolver::~Resolver() = default;
 

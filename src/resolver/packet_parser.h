@@ -67,6 +67,13 @@ public:
    */
   void reset() { offset_ = 0; }
 
+  /**
+   * @brief Decode a domain name from the packet, handling compression
+   * @return Decoded domain name
+   * @throws ParseException if the name is malformed or contains loops
+   */
+  std::string decode_name();
+
 private:
   const std::vector<uint8_t> &packet_;
   mutable size_t offset_;
@@ -99,13 +106,6 @@ private:
    * @throws ParseException if there are insufficient bytes
    */
   std::vector<uint8_t> read_bytes(size_t length);
-
-  /**
-   * @brief Decode a domain name from the packet, handling compression
-   * @return Decoded domain name
-   * @throws ParseException if the name is malformed or contains loops
-   */
-  std::string decode_name();
 
   /**
    * @brief Decode a domain name starting at a specific offset (for compression)

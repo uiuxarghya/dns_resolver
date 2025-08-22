@@ -1,10 +1,40 @@
 #include "cache.h"
 
 #include <algorithm>
+#include <iostream>
+
+#include "packet_parser.h"
 
 namespace dns_resolver {
 
-DnsCache::DnsCache(size_t max_size) : max_size_(max_size) {}
+DnsCache::DnsCache(size_t max_size, const std::string &cache_file)
+    : max_size_(max_size), cache_file_(cache_file) {}
+
+// Load cache from file (simple text)
+void DnsCache::load_from_file(const std::string &filename) {
+  std::ifstream in(filename);
+  if (!in) return;
+  std::string line;
+  while (std::getline(in, line)) {
+    std::string key;
+    CacheEntry entry = CacheEntry::deserialize(line, key);
+    if (!entry.is_expired() && !key.empty()) {
+      cache_[key] = entry;
+      add_to_front(key);
+    }
+  }
+}
+
+// Save cache to file (simple text)
+void DnsCache::save_to_file(const std::string &filename) {
+  std::ofstream out(filename);
+  if (!out) return;
+  for (const auto &[key, entry] : cache_) {
+    if (!entry.is_expired()) {
+      out << entry.serialize(key) << "\n";
+    }
+  }
+}
 
 std::optional<CacheEntry> DnsCache::get(const std::string &key) {
   std::shared_lock<std::shared_mutex> lock(cache_mutex_);
@@ -48,6 +78,7 @@ void DnsCache::put(const std::string &key, const CacheEntry &entry) {
     add_to_front(key);
     enforce_size_limit();
   }
+  if (!cache_file_.empty()) save_to_file(cache_file_);
 }
 
 bool DnsCache::remove(const std::string &key) {
@@ -60,6 +91,7 @@ bool DnsCache::remove(const std::string &key) {
 
   cache_.erase(it);
   remove_from_lru(key);
+  if (!cache_file_.empty()) save_to_file(cache_file_);
   return true;
 }
 
@@ -68,6 +100,7 @@ void DnsCache::clear() {
   cache_.clear();
   lru_list_.clear();
   lru_map_.clear();
+  if (!cache_file_.empty()) save_to_file(cache_file_);
 }
 
 size_t DnsCache::cleanup_expired() {
@@ -265,8 +298,14 @@ std::vector<std::string> extract_domain_names(const std::vector<ResourceRecord> 
   std::vector<std::string> names;
   for (const auto &rr : records) {
     if (rr.type == RecordType::CNAME || rr.type == RecordType::NS) {
-      // TODO: Implement domain name extraction from RDATA
-      // This requires proper parsing of the encoded domain names
+      // rdata for CNAME/NS contains an encoded domain name; use PacketParser to decode it
+      try {
+        PacketParser name_parser(rr.rdata);
+        std::string decoded = name_parser.decode_name();
+        if (!decoded.empty()) names.push_back(utils::normalize_domain_name(decoded));
+      } catch (...) {
+        // Ignore malformed rdata or parse errors
+      }
     }
   }
   return names;

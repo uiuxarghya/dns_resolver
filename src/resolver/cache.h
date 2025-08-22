@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <fstream>
 #include <list>
 #include <mutex>
 #include <optional>
@@ -52,6 +53,48 @@ struct CacheEntry {
     auto remaining = std::chrono::duration_cast<std::chrono::seconds>(expiry_time - now);
     return static_cast<uint32_t>(remaining.count());
   }
+  // Simple text serialization
+  std::string serialize(const std::string &key) const {
+    std::string line = key + "|";
+    line += std::to_string(
+                std::chrono::duration_cast<std::chrono::seconds>(expiry_time.time_since_epoch())
+                    .count()) +
+            "|";
+    line += std::to_string(original_ttl) + "|";
+    line += std::to_string(is_negative ? 1 : 0) + "|";
+    line += std::to_string(static_cast<int>(record_type)) + "|";
+    for (size_t i = 0; i < records.size(); ++i) {
+      line += records[i];
+      if (i + 1 < records.size()) line += ",";
+    }
+    return line;
+  }
+  static CacheEntry deserialize(const std::string &line, std::string &key_out) {
+    CacheEntry entry;
+    size_t pos = 0, next = 0;
+    std::vector<std::string> fields;
+    while ((next = line.find('|', pos)) != std::string::npos) {
+      fields.push_back(line.substr(pos, next - pos));
+      pos = next + 1;
+    }
+    fields.push_back(line.substr(pos));
+    if (fields.size() < 6) return entry;
+    key_out = fields[0];
+    auto expiry_secs = std::stoll(fields[1]);
+    entry.expiry_time = std::chrono::system_clock::time_point(std::chrono::seconds(expiry_secs));
+    entry.original_ttl = static_cast<uint32_t>(std::stoul(fields[2]));
+    entry.is_negative = (fields[3] == "1");
+    entry.record_type = static_cast<RecordType>(std::stoi(fields[4]));
+    entry.records.clear();
+    std::string recs = fields[5];
+    size_t rpos = 0, rnext = 0;
+    while ((rnext = recs.find(',', rpos)) != std::string::npos) {
+      entry.records.push_back(recs.substr(rpos, rnext - rpos));
+      rpos = rnext + 1;
+    }
+    if (rpos < recs.size()) entry.records.push_back(recs.substr(rpos));
+    return entry;
+  }
 };
 
 /**
@@ -70,7 +113,12 @@ public:
    * @brief Construct a new DNS cache
    * @param max_size Maximum number of entries to store (0 for unlimited)
    */
-  explicit DnsCache(size_t max_size = 10000);
+  // If cache_file is empty, persistence is disabled (no save/load to disk).
+  explicit DnsCache(size_t max_size = 10000, const std::string &cache_file = "");
+
+  // Persistent cache support
+  void load_from_file(const std::string &filename);
+  void save_to_file(const std::string &filename);
 
   /**
    * @brief Destructor
@@ -167,6 +215,9 @@ private:
   std::list<std::string> lru_list_;
   std::unordered_map<std::string, std::list<std::string>::iterator> lru_map_;
   size_t max_size_;
+
+  // Empty means persistence disabled
+  std::string cache_file_ = "";
 
   // Statistics (atomic for thread safety)
   mutable std::atomic<uint64_t> hit_count_{0};
